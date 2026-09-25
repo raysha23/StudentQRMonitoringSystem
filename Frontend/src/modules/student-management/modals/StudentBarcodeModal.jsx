@@ -1,32 +1,74 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
-import { X, Printer } from "lucide-react";
+import { X, Printer, Loader2, AlertTriangle } from "lucide-react";
+import { getStudentBarcode } from "../../../api/student-barcode-api";
 
 export default function StudentBarcodeModal({ student, onClose }) {
     const svgRef = useRef(null);
+    const [barcode, setBarcode] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
+    // 1. Fetch the real barcode value from the backend
     useEffect(() => {
-        if (svgRef.current && student?.StudentNumber) {
-            JsBarcode(svgRef.current, student.StudentNumber, {
-                format: "CODE128", // handles letters, numbers, dashes — fits "2025-0001"
-                width: 2,
-                height: 70,
-                displayValue: true,
-                fontSize: 14,
-                margin: 10,
+        let cancelled = false;
+        if (!student?.StudentID) return;
+
+        setLoading(true);
+        setError(null);
+        setBarcode(null);
+
+        getStudentBarcode(student.StudentID)
+            .then((res) => {
+                if (!cancelled) setBarcode(res.data);
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    console.error(err);
+                    setError(
+                        err.response?.data?.message ||
+                            "Failed to load barcode.",
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
             });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [student?.StudentID]);
+
+    // 2. Render JsBarcode once we have the value
+    useEffect(() => {
+        if (svgRef.current && barcode?.BarcodeValue) {
+            try {
+                JsBarcode(svgRef.current, barcode.BarcodeValue, {
+                    format: barcode.BarcodeFormat || "CODE128",
+                    width: 2,
+                    height: 70,
+                    displayValue: true,
+                    fontSize: 14,
+                    margin: 10,
+                });
+            } catch (err) {
+                console.error("Barcode render error:", err);
+                setError("Invalid barcode format.");
+            }
         }
-    }, [student]);
+    }, [barcode]);
 
     const handlePrint = () => {
-        if (!svgRef.current) return;
+        if (!svgRef.current || !barcode) return;
+
         const svgMarkup = new XMLSerializer().serializeToString(svgRef.current);
         const fullName = `${student.FirstName} ${student.LastName}`;
 
         const printWindow = window.open("", "_blank", "width=420,height=320");
         printWindow.document.write(`
             <html>
-                <head><title>Student Barcode - ${student.StudentNumber}</title></head>
+                <head><title>Student Barcode - ${barcode.BarcodeValue}</title></head>
                 <body style="text-align:center; font-family: sans-serif; margin-top: 24px;">
                     <div style="font-weight:bold; font-size:14px; margin-bottom:4px;">${fullName}</div>
                     <div style="font-size:11px; color:#666; margin-bottom:12px;">${student.StudentNumber}</div>
@@ -68,13 +110,37 @@ export default function StudentBarcodeModal({ student, onClose }) {
                         {student.StudentNumber}
                     </p>
 
-                    <div className="flex justify-center bg-slate-50 rounded-xl p-4 border border-slate-100">
-                        <svg ref={svgRef}></svg>
+                    <div className="flex justify-center items-center bg-slate-50 rounded-xl p-4 border border-slate-100 min-h-[130px]">
+                        {loading && (
+                            <div className="flex items-center gap-2 text-slate-400 text-xs">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Loading barcode...
+                            </div>
+                        )}
+
+                        {error && !loading && (
+                            <div className="flex items-center gap-2 text-rose-600 text-xs font-medium">
+                                <AlertTriangle className="w-4 h-4 shrink-0" />
+                                <span>{error}</span>
+                            </div>
+                        )}
+
+                        <svg
+                            ref={svgRef}
+                            className={loading || error ? "hidden" : ""}
+                        ></svg>
                     </div>
+
+                    {barcode?.BarcodeValue && !loading && !error && (
+                        <p className="text-[11px] text-slate-400 font-mono mt-3">
+                            {barcode.BarcodeValue}
+                        </p>
+                    )}
 
                     <button
                         onClick={handlePrint}
-                        className="mt-5 w-full flex items-center justify-center space-x-2 bg-[#1b2537] hover:bg-[#25324c] text-white text-xs font-bold px-4 py-2.5 rounded-lg transition-all shadow-sm active:scale-95"
+                        disabled={loading || !!error || !barcode}
+                        className="mt-5 w-full flex items-center justify-center space-x-2 bg-[#1b2537] hover:bg-[#25324c] text-white text-xs font-bold px-4 py-2.5 rounded-lg transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Printer className="w-4 h-4" />
                         <span>Print Barcode</span>
