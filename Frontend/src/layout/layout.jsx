@@ -8,62 +8,73 @@ export default function Layout({ children, activeTab, setActiveTab }) {
 
     return (
         <div className="flex h-screen bg-[#f1f5f9] font-sans antialiased overflow-hidden">
-            {/* Sidebar — width animates open/closed */}
+            {/* Sidebar — width animates between full (w-64) and icon-only (w-20) */}
             <aside
-                className={`bg-[#1b2537] text-slate-300 flex flex-col shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-0'
+                className={`bg-[#1b2537] text-slate-300 flex flex-col shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-20'
                     }`}
             >
-                {/* Fixed-width inner wrapper so content doesn't squish/wrap during the width transition */}
-                <div className="w-64 flex flex-col h-full">
-                    <div className="p-5 flex items-center space-x-3">
-                        <div className="bg-[#2a3854] p-2 rounded-md text-white flex items-center justify-center">
+                <div className="flex flex-col h-full">
+                    {/* Logo */}
+                    <div className={`p-5 flex items-center ${isSidebarOpen ? 'space-x-3' : 'justify-center'}`}>
+                        <div className="bg-[#2a3854] p-2 rounded-md text-white flex items-center justify-center shrink-0">
                             <GraduationCap className="w-6 h-6 text-white" />
                         </div>
-                        <div>
-                            <h1 className="text-sm font-bold text-white tracking-wide leading-tight">School IMS</h1>
-                            <p className="text-[11px] text-slate-400 font-medium">Monitoring System</p>
-                        </div>
+                        {isSidebarOpen && (
+                            <div className="whitespace-nowrap">
+                                <h1 className="text-sm font-bold text-white tracking-wide leading-tight">School</h1>
+                                <p className="text-[11px] text-slate-400 font-medium">Monitoring System</p>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="mt-4 px-4 flex-1">
-                        <p className="text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-3 px-2">MODULES</p>
+                    {/* Nav */}
+                    <div className={`mt-4 flex-1 ${isSidebarOpen ? 'px-4' : 'px-2'}`}>
                         <nav className="space-y-1">
                             {routes.map(({ id, label, sublabel, icon: Icon }) => (
                                 <button
                                     key={id}
                                     onClick={() => setActiveTab(id)}
-                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${activeTab === id
-                                        ? 'bg-[#2a3a5c] text-white shadow-sm'
-                                        : 'hover:bg-[#25324c] text-slate-400 hover:text-white'
+                                    title={!isSidebarOpen ? label : undefined}
+                                    className={`w-full flex items-center rounded-lg text-xs font-semibold transition-all ${isSidebarOpen ? 'justify-between px-3 py-2.5' : 'justify-center py-2.5'
+                                        } ${activeTab === id
+                                            ? 'bg-[#2a3a5c] text-white shadow-sm'
+                                            : 'hover:bg-[#25324c] text-slate-400 hover:text-white'
                                         }`}
                                 >
-                                    <div className="flex items-center space-x-3">
-                                        <Icon className="w-4 h-4" />
-                                        {sublabel ? (
-                                            <div className="text-left">
-                                                <div>{label}</div>
-                                                <div className="text-[10px] font-normal text-slate-400 -mt-0.5">{sublabel}</div>
-                                            </div>
-                                        ) : (
-                                            <span>{label}</span>
+                                    <div className={`flex items-center ${isSidebarOpen ? 'space-x-3' : ''}`}>
+                                        <Icon className="w-5 h-5 shrink-0" />
+                                        {isSidebarOpen && (
+                                            sublabel ? (
+                                                <div className="text-left whitespace-nowrap">
+                                                    <div>{label}</div>
+                                                    <div className="text-[10px] font-normal text-slate-400 -mt-0.5">{sublabel}</div>
+                                                </div>
+                                            ) : (
+                                                <span className="whitespace-nowrap">{label}</span>
+                                            )
                                         )}
                                     </div>
-                                    {activeTab === id && <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>}
+                                    {isSidebarOpen && activeTab === id && (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></span>
+                                    )}
                                 </button>
                             ))}
                         </nav>
                     </div>
 
-                    <div className="p-4 border-t border-slate-700/50 text-[11px] text-slate-400 font-medium">
-                        School Year 2024–2025
-                    </div>
+                    {/* Footer */}
+                    {isSidebarOpen && (
+                        <div className="p-4 border-t border-slate-700/50 text-[11px] text-slate-400 font-medium whitespace-nowrap">
+                            School Year 2024–2025
+                        </div>
+                    )}
                 </div>
             </aside>
 
             {/* Main Container */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 <header className="h-16 bg-white border-b border-slate-200/80 px-2 flex items-center justify-between shrink-0">
-                    {/* Hamburger toggle only */}
+                    {/* Hamburger toggle */}
                     <button
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                         className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600"
