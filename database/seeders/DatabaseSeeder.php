@@ -60,16 +60,18 @@ class DatabaseSeeder extends Seeder
         ]);
 
         collect([
-            ['StudentNumber' => '2025-0001', 'FirstName' => 'Juan', 'LastName' => 'Dela Cruz', 'i' => 0],
-            ['StudentNumber' => '2025-0002', 'FirstName' => 'Maria', 'LastName' => 'Santos', 'i' => 1],
-            ['StudentNumber' => '2025-0003', 'FirstName' => 'Pedro', 'LastName' => 'Reyes', 'i' => 2],
-            ['StudentNumber' => '2025-0004', 'FirstName' => 'Ana', 'LastName' => 'Garcia', 'i' => 3],
-            ['StudentNumber' => '2025-0005', 'FirstName' => 'Jose', 'LastName' => 'Lopez', 'i' => 4],
+            ['StudentNumber' => '2025-0001', 'FirstName' => 'Juan', 'LastName' => 'Dela Cruz', 'i' => 0, 'Phone' => '09171234567'],
+            ['StudentNumber' => '2025-0002', 'FirstName' => 'Maria', 'LastName' => 'Santos', 'i' => 1, 'Phone' => '09182345678'],
+            ['StudentNumber' => '2025-0003', 'FirstName' => 'Pedro', 'LastName' => 'Reyes', 'i' => 2, 'Phone' => '09193456789'],
+            ['StudentNumber' => '2025-0004', 'FirstName' => 'Ana', 'LastName' => 'Garcia', 'i' => 3, 'Phone' => '09204567890'],
+            ['StudentNumber' => '2025-0005', 'FirstName' => 'Jose', 'LastName' => 'Lopez', 'i' => 4, 'Phone' => '09215678901'],
         ])->each(function ($s) use ($courses, $sections, $schoolYear) {
             Student::create([
                 'StudentNumber' => $s['StudentNumber'],
                 'FirstName' => $s['FirstName'],
                 'LastName' => $s['LastName'],
+                'ContactNumber' => $s['Phone'], // 👈 new
+                'ProfilePicture' => "https://api.dicebear.com/9.x/initials/svg?seed={$s['FirstName']}-{$s['LastName']}",
                 'CourseID' => $courses[$s['i']]->CourseID,
                 'SectionID' => $sections[$s['i']]->SectionID,
                 'YearLevel' => $sections[$s['i']]->YearLevel,

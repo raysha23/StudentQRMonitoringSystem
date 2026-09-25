@@ -22,6 +22,7 @@ class Student extends Model
         'Address',
         'ContactNumber',
         'Email',
+        'ProfilePicture',
         'CourseID',
         'SectionID',
         'YearLevel',

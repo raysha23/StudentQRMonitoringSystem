@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('Address', 255)->nullable();
             $table->string('ContactNumber', 30)->nullable();
             $table->string('Email', 150)->nullable();
+             $table->string('ProfilePicture', 255)->nullable(); 
             $table->foreignId('CourseID')->constrained('courses', 'CourseID');
             $table->foreignId('SectionID')->constrained('sections', 'SectionID');
             $table->integer('YearLevel')->nullable();

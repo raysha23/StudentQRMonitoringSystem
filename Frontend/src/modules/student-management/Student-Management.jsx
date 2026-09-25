@@ -1,36 +1,61 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from "react";
 import {
-    Clock, FileText, Search, Plus, LayoutGrid,
-    Edit3, Trash2, X, ChevronDown
-} from 'lucide-react';
+    Clock,
+    FileText,
+    Search,
+    Plus,
+    LayoutGrid,
+    Edit3,
+    Trash2,
+    X,
+    ChevronDown,
+    Barcode,
+} from "lucide-react";
 
-import { getStudents, createStudent, updateStudent, deleteStudent } from '../../api/student-api';
-import { getCourses } from '../../api/course-api';
-import { getSections } from '../../api/section-api';
+import StudentBarcodeModal from "./modals/StudentBarcodeModal";
+import StudentFormModal from "./modals/StudentFormModal";
+import StudentViewModal from "./modals/StudentViewModal";
+
+import {
+    getStudents,
+    createStudent,
+    updateStudent,
+    deleteStudent,
+} from "../../api/student-api";
+import { getCourses } from "../../api/course-api";
+import { getSections } from "../../api/section-api";
+import { getSchoolYears } from "../../api/school-year-api";
 
 const emptyForm = {
-    StudentNumber: '',
-    FirstName: '',
-    LastName: '',
-    CourseID: '',
-    SectionID: '',
+    StudentNumber: "",
+    FirstName: "",
+    MiddleName: "",
+    LastName: "",
+    Suffix: "",
+    DateOfBirth: "",
+    Gender: "",
+    Address: "",
+    ContactNumber: "",
+    Email: "",
+    CourseID: "",
+    SectionID: "",
     YearLevel: 1,
-    Email: '',
-    ContactNumber: '',
-    Status: 'Enrolled',
+    SchoolYearID: "",
+    Status: "Enrolled",
 };
 
 export default function StudentManagementModule() {
     const [students, setStudents] = useState([]);
     const [courses, setCourses] = useState([]);
     const [sections, setSections] = useState([]);
+    const [schoolYears, setSchoolYears] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCourse, setSelectedCourse] = useState('All Courses');
-    const [selectedYear, setSelectedYear] = useState('All Year Levels');
-    const [selectedStatus, setSelectedStatus] = useState('All Status');
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedCourse, setSelectedCourse] = useState("All Courses");
+    const [selectedYear, setSelectedYear] = useState("All Year Levels");
+    const [selectedStatus, setSelectedStatus] = useState("All Status");
 
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -38,6 +63,7 @@ export default function StudentManagementModule() {
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [formData, setFormData] = useState(emptyForm);
 
+    const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
     useEffect(() => {
         loadAll();
     }, []);
@@ -46,63 +72,96 @@ export default function StudentManagementModule() {
         setLoading(true);
         setError(null);
         try {
-            const [studentsRes, coursesRes, sectionsRes] = await Promise.all([
-                getStudents(),
-                getCourses(),
-                getSections(),
-            ]);
+            const [studentsRes, coursesRes, sectionsRes, schoolYearsRes] =
+                await Promise.all([
+                    getStudents(),
+                    getCourses(),
+                    getSections(),
+                    getSchoolYears(),
+                ]);
             setStudents(studentsRes.data);
             setCourses(coursesRes.data);
             setSections(sectionsRes.data);
+            setSchoolYears(schoolYearsRes.data);
         } catch (err) {
-            setError('Failed to load data. Is the backend running?');
+            setError("Failed to load data. Is the backend running?");
             console.error(err);
         } finally {
             setLoading(false);
         }
     };
 
-    const courseName = (id) => courses.find(c => c.CourseID === id)?.CourseName || '—';
-    const sectionName = (id) => sections.find(s => s.SectionID === id)?.SectionName || '—';
+    const courseName = (id) =>
+        courses.find((c) => c.CourseID === id)?.CourseName || "—";
+    const sectionName = (id) =>
+        sections.find((s) => s.SectionID === id)?.SectionName || "—";
 
     const metrics = useMemo(() => {
         const total = students.length;
-        const active = students.filter(s => s.Status === 'Enrolled').length;
-        const inactive = students.filter(s => s.Status !== 'Enrolled').length;
+        const active = students.filter((s) => s.Status === "Enrolled").length;
+        const inactive = students.filter((s) => s.Status !== "Enrolled").length;
         return { total, active, inactive };
     }, [students]);
 
     const filteredStudents = useMemo(() => {
-        return students.filter(student => {
-            const fullName = `${student.FirstName} ${student.LastName}`.toLowerCase();
+        return students.filter((student) => {
+            const fullName =
+                `${student.FirstName} ${student.LastName}`.toLowerCase();
             const matchesSearch =
                 fullName.includes(searchQuery.toLowerCase()) ||
-                student.StudentNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                student.Email?.toLowerCase().includes(searchQuery.toLowerCase());
+                student.StudentNumber?.toLowerCase().includes(
+                    searchQuery.toLowerCase(),
+                ) ||
+                student.Email?.toLowerCase().includes(
+                    searchQuery.toLowerCase(),
+                );
 
-            const matchesCourse = selectedCourse === 'All Courses' || courseName(student.CourseID) === selectedCourse;
-            const matchesYear = selectedYear === 'All Year Levels' || String(student.YearLevel) === selectedYear;
-            const matchesStatus = selectedStatus === 'All Status' || student.Status === selectedStatus;
+            const matchesCourse =
+                selectedCourse === "All Courses" ||
+                courseName(student.CourseID) === selectedCourse;
+            const matchesYear =
+                selectedYear === "All Year Levels" ||
+                String(student.YearLevel) === selectedYear;
+            const matchesStatus =
+                selectedStatus === "All Status" ||
+                student.Status === selectedStatus;
 
-            return matchesSearch && matchesCourse && matchesYear && matchesStatus;
+            return (
+                matchesSearch && matchesCourse && matchesYear && matchesStatus
+            );
         });
-    }, [students, searchQuery, selectedCourse, selectedYear, selectedStatus, courses, sections]);
+    }, [
+        students,
+        searchQuery,
+        selectedCourse,
+        selectedYear,
+        selectedStatus,
+        courses,
+        sections,
+    ]);
+
+    const buildPayload = () => ({
+        ...formData,
+        MiddleName: formData.MiddleName || null,
+        Suffix: formData.Suffix || null,
+        DateOfBirth: formData.DateOfBirth || null,
+        Gender: formData.Gender || null,
+        Address: formData.Address || null,
+        CourseID: Number(formData.CourseID),
+        SectionID: Number(formData.SectionID),
+        YearLevel: Number(formData.YearLevel),
+        SchoolYearID: Number(formData.SchoolYearID),
+    });
 
     const handleCreateStudent = async (e) => {
         e.preventDefault();
         try {
-            const res = await createStudent({
-                ...formData,
-                CourseID: Number(formData.CourseID),
-                SectionID: Number(formData.SectionID),
-                YearLevel: Number(formData.YearLevel),
-                SchoolYearID: 1,
-            });
+            const res = await createStudent(buildPayload());
             setStudents([res.data, ...students]);
             setIsAddModalOpen(false);
             resetForm();
         } catch (err) {
-            alert('Failed to create student. Check console for details.');
+            alert("Failed to create student. Check console for details.");
             console.error(err.response?.data || err);
         }
     };
@@ -110,29 +169,31 @@ export default function StudentManagementModule() {
     const handleUpdateStudent = async (e) => {
         e.preventDefault();
         try {
-            const res = await updateStudent(selectedStudent.StudentID, {
-                ...formData,
-                CourseID: Number(formData.CourseID),
-                SectionID: Number(formData.SectionID),
-                YearLevel: Number(formData.YearLevel),
-                SchoolYearID: selectedStudent.SchoolYearID,
-            });
-            setStudents(students.map(s => s.StudentID === selectedStudent.StudentID ? res.data : s));
+            const res = await updateStudent(
+                selectedStudent.StudentID,
+                buildPayload(),
+            );
+            setStudents(
+                students.map((s) =>
+                    s.StudentID === selectedStudent.StudentID ? res.data : s,
+                ),
+            );
             setIsEditModalOpen(false);
             setSelectedStudent(null);
         } catch (err) {
-            alert('Failed to update student. Check console for details.');
+            alert("Failed to update student. Check console for details.");
             console.error(err.response?.data || err);
         }
     };
 
     const handleDeleteStudent = async (id) => {
-        if (!confirm('Are you sure you want to delete this student record?')) return;
+        if (!confirm("Are you sure you want to delete this student record?"))
+            return;
         try {
             await deleteStudent(id);
-            setStudents(students.filter(s => s.StudentID !== id));
+            setStudents(students.filter((s) => s.StudentID !== id));
         } catch (err) {
-            alert('Failed to delete student.');
+            alert("Failed to delete student.");
             console.error(err.response?.data || err);
         }
     };
@@ -142,12 +203,18 @@ export default function StudentManagementModule() {
         setFormData({
             StudentNumber: student.StudentNumber,
             FirstName: student.FirstName,
+            MiddleName: student.MiddleName || "",
             LastName: student.LastName,
+            Suffix: student.Suffix || "",
+            DateOfBirth: student.DateOfBirth || "",
+            Gender: student.Gender || "",
+            Address: student.Address || "",
             CourseID: student.CourseID,
             SectionID: student.SectionID,
             YearLevel: student.YearLevel,
-            Email: student.Email || '',
-            ContactNumber: student.ContactNumber || '',
+            SchoolYearID: student.SchoolYearID,
+            Email: student.Email || "",
+            ContactNumber: student.ContactNumber || "",
             Status: student.Status,
         });
         setIsEditModalOpen(true);
@@ -161,14 +228,21 @@ export default function StudentManagementModule() {
     const resetForm = () => setFormData(emptyForm);
 
     if (loading) {
-        return <div className="p-8 text-center text-slate-400 text-sm">Loading students...</div>;
+        return (
+            <div className="p-8 text-center text-slate-400 text-sm">
+                Loading students...
+            </div>
+        );
     }
 
     if (error) {
         return (
             <div className="p-8 text-center text-rose-500 text-sm">
                 {error}
-                <button onClick={loadAll} className="block mx-auto mt-3 px-4 py-2 bg-slate-800 text-white rounded-lg text-xs">
+                <button
+                    onClick={loadAll}
+                    className="block mx-auto mt-3 px-4 py-2 bg-slate-800 text-white rounded-lg text-xs"
+                >
                     Retry
                 </button>
             </div>
@@ -177,24 +251,39 @@ export default function StudentManagementModule() {
 
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto">
-
             <div>
-                <h1 className="text-lg font-bold text-slate-800 leading-none">Student Management</h1>
-                <p className="text-xs text-slate-400 mt-1 font-medium">School Administration</p>
+                <h1 className="text-lg font-bold text-slate-800 leading-none">
+                    Student Management
+                </h1>
+                <p className="text-xs text-slate-400 mt-1 font-medium">
+                    School Administration
+                </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm transition-all hover:shadow-md">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">TOTAL STUDENTS</p>
-                    <p className="text-3xl font-extrabold text-slate-800 mt-2">{metrics.total}</p>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        TOTAL STUDENTS
+                    </p>
+                    <p className="text-3xl font-extrabold text-slate-800 mt-2">
+                        {metrics.total}
+                    </p>
                 </div>
                 <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm transition-all hover:shadow-md">
-                    <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">ENROLLED</p>
-                    <p className="text-3xl font-extrabold text-emerald-500 mt-2">{metrics.active}</p>
+                    <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">
+                        ENROLLED
+                    </p>
+                    <p className="text-3xl font-extrabold text-emerald-500 mt-2">
+                        {metrics.active}
+                    </p>
                 </div>
                 <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm transition-all hover:shadow-md">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">NOT ENROLLED</p>
-                    <p className="text-3xl font-extrabold text-slate-700 mt-2">{metrics.inactive}</p>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        NOT ENROLLED
+                    </p>
+                    <p className="text-3xl font-extrabold text-slate-700 mt-2">
+                        {metrics.inactive}
+                    </p>
                 </div>
             </div>
 
@@ -218,7 +307,9 @@ export default function StudentManagementModule() {
                             className="appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors"
                         >
                             <option>All Courses</option>
-                            {courses.map(c => <option key={c.CourseID}>{c.CourseName}</option>)}
+                            {courses.map((c) => (
+                                <option key={c.CourseID}>{c.CourseName}</option>
+                            ))}
                         </select>
                         <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
@@ -252,7 +343,10 @@ export default function StudentManagementModule() {
                     </div>
 
                     <button
-                        onClick={() => { resetForm(); setIsAddModalOpen(true); }}
+                        onClick={() => {
+                            resetForm();
+                            setIsAddModalOpen(true);
+                        }}
                         className="flex items-center space-x-1.5 bg-[#1b2537] hover:bg-[#25324c] text-white text-xs font-bold px-4 py-2 rounded-lg transition-all shadow-sm active:scale-95 ml-2"
                     >
                         <Plus className="w-4 h-4" />
@@ -273,15 +367,41 @@ export default function StudentManagementModule() {
                                 <th className="py-4 px-4">YEAR</th>
                                 <th className="py-4 px-6">CONTACT</th>
                                 <th className="py-4 px-4">STATUS</th>
-                                <th className="py-4 px-6 text-right">ACTIONS</th>
+                                <th className="py-4 px-6 text-right">
+                                    ACTIONS
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs">
                             {filteredStudents.length > 0 ? (
                                 filteredStudents.map((student) => (
-                                    <tr key={student.StudentID} className="hover:bg-slate-50/70 transition-colors group">
+                                    <tr
+                                        key={student.StudentID}
+                                        className="hover:bg-slate-50/70 transition-colors group"
+                                    >
                                         <td className="py-3.5 px-6 font-bold text-slate-800">
-                                            {student.FirstName} {student.LastName}
+                                            <div className="flex items-center gap-3">
+                                                <img
+                                                    src={
+                                                        student.ProfilePicture ||
+                                                        `https://api.dicebear.com/9.x/initials/svg?seed=${student.FirstName}-${student.LastName}`
+                                                    }
+                                                    alt={`${student.FirstName} ${student.LastName}`}
+                                                    className="w-8 h-8 rounded-full object-cover bg-slate-100"
+                                                />
+                                                <span>
+                                                    {student.FirstName}{" "}
+                                                    {student.MiddleName
+                                                        ? student.MiddleName.charAt(
+                                                              0,
+                                                          ) + ". "
+                                                        : ""}
+                                                    {student.LastName}
+                                                    {student.Suffix
+                                                        ? ` ${student.Suffix}`
+                                                        : ""}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="py-3.5 px-4 font-mono text-[11px] text-slate-400 font-semibold">
                                             {student.StudentNumber}
@@ -298,11 +418,13 @@ export default function StudentManagementModule() {
                                         <td className="py-3.5 px-6">
                                             <div className="text-slate-500 text-[11px] font-medium leading-snug">
                                                 <div>{student.Email}</div>
-                                                <div className="text-slate-400 text-[10px]">{student.ContactNumber}</div>
+                                                <div className="text-slate-400 text-[10px]">
+                                                    {student.ContactNumber}
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="py-3.5 px-4">
-                                            {student.Status === 'Enrolled' ? (
+                                            {student.Status === "Enrolled" ? (
                                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-medium bg-emerald-100/70 text-emerald-700">
                                                     Enrolled
                                                 </span>
@@ -314,13 +436,47 @@ export default function StudentManagementModule() {
                                         </td>
                                         <td className="py-3.5 px-6 text-right">
                                             <div className="flex items-center justify-end space-x-2 text-slate-400">
-                                                <button onClick={() => openViewModal(student)} title="View Details" className="p-1 hover:text-slate-600 rounded transition-colors">
+                                                <button
+                                                    onClick={() =>
+                                                        openViewModal(student)
+                                                    }
+                                                    title="View Details"
+                                                    className="p-1 hover:text-slate-600 rounded transition-colors"
+                                                >
                                                     <LayoutGrid className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => openEditModal(student)} title="Edit Student" className="p-1 hover:text-blue-600 rounded transition-colors">
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedStudent(
+                                                            student,
+                                                        );
+                                                        setIsBarcodeModalOpen(
+                                                            true,
+                                                        );
+                                                    }}
+                                                    title="View Barcode"
+                                                    className="p-1 hover:text-slate-800 rounded transition-colors"
+                                                >
+                                                    <Barcode className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() =>
+                                                        openEditModal(student)
+                                                    }
+                                                    title="Edit Student"
+                                                    className="p-1 hover:text-blue-600 rounded transition-colors"
+                                                >
                                                     <Edit3 className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => handleDeleteStudent(student.StudentID)} title="Delete Student" className="p-1 hover:text-rose-600 rounded transition-colors">
+                                                <button
+                                                    onClick={() =>
+                                                        handleDeleteStudent(
+                                                            student.StudentID,
+                                                        )
+                                                    }
+                                                    title="Delete Student"
+                                                    className="p-1 hover:text-rose-600 rounded transition-colors"
+                                                >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -329,8 +485,12 @@ export default function StudentManagementModule() {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="8" className="py-8 text-center text-slate-400">
-                                        No student records found matching filters.
+                                    <td
+                                        colSpan="8"
+                                        className="py-8 text-center text-slate-400"
+                                    >
+                                        No student records found matching
+                                        filters.
                                     </td>
                                 </tr>
                             )}
@@ -347,9 +507,17 @@ export default function StudentManagementModule() {
                     setFormData={setFormData}
                     courses={courses}
                     sections={sections}
+                    schoolYears={schoolYears}
                     onSubmit={handleCreateStudent}
                     onClose={() => setIsAddModalOpen(false)}
                     submitLabel="Save Student"
+                />
+            )}
+
+            {isBarcodeModalOpen && selectedStudent && (
+                <StudentBarcodeModal
+                    student={selectedStudent}
+                    onClose={() => setIsBarcodeModalOpen(false)}
                 />
             )}
 
@@ -361,187 +529,21 @@ export default function StudentManagementModule() {
                     setFormData={setFormData}
                     courses={courses}
                     sections={sections}
+                    schoolYears={schoolYears}
                     onSubmit={handleUpdateStudent}
                     onClose={() => setIsEditModalOpen(false)}
                     submitLabel="Update Student"
                 />
             )}
 
-            {/* --- MODAL: VIEW DETAILS --- */}
             {isViewModalOpen && selectedStudent && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                            <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Student Profile Card</h3>
-                            <button onClick={() => setIsViewModalOpen(false)} className="text-slate-400 hover:text-slate-600 rounded-lg p-1">
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-                        <div className="p-6 text-center">
-                            <h4 className="font-bold text-slate-800 text-base">{selectedStudent.FirstName} {selectedStudent.LastName}</h4>
-                            <p className="font-mono text-xs text-slate-400 font-medium">{selectedStudent.StudentNumber}</p>
-
-                            <div className="mt-4 inline-block">
-                                {selectedStudent.Status === 'Enrolled' ? (
-                                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Enrolled</span>
-                                ) : (
-                                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">Not Enrolled</span>
-                                )}
-                            </div>
-
-                            <div className="mt-6 bg-slate-50 rounded-xl p-4 text-left space-y-2 text-xs">
-                                <div className="flex justify-between border-b border-slate-200/60 pb-2">
-                                    <span className="text-slate-400 font-medium">Course:</span>
-                                    <span className="font-bold text-slate-700">{courseName(selectedStudent.CourseID)}</span>
-                                </div>
-                                <div className="flex justify-between border-b border-slate-200/60 pb-2">
-                                    <span className="text-slate-400 font-medium">Section & Year:</span>
-                                    <span className="font-bold text-slate-700">{sectionName(selectedStudent.SectionID)} - Year {selectedStudent.YearLevel}</span>
-                                </div>
-                                <div className="flex justify-between border-b border-slate-200/60 pb-2">
-                                    <span className="text-slate-400 font-medium">Email:</span>
-                                    <span className="font-medium text-slate-700">{selectedStudent.Email}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-slate-400 font-medium">Phone:</span>
-                                    <span className="font-medium text-slate-700">{selectedStudent.ContactNumber}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <StudentViewModal
+                    student={selectedStudent}
+                    courseName={courseName}
+                    sectionName={sectionName}
+                    onClose={() => setIsViewModalOpen(false)}
+                />
             )}
-        </div>
-    );
-}
-
-function StudentFormModal({ title, formData, setFormData, courses, sections, onSubmit, onClose, submitLabel }) {
-    return (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="font-bold text-slate-800 text-sm">{title}</h3>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 rounded-lg p-1">
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-
-                <form onSubmit={onSubmit} className="p-5 space-y-4">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Student Number</label>
-                        <input
-                            type="text" required placeholder="2025-0001"
-                            value={formData.StudentNumber}
-                            onChange={(e) => setFormData({ ...formData, StudentNumber: e.target.value })}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">First Name</label>
-                            <input
-                                type="text" required
-                                value={formData.FirstName}
-                                onChange={(e) => setFormData({ ...formData, FirstName: e.target.value })}
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">Last Name</label>
-                            <input
-                                type="text" required
-                                value={formData.LastName}
-                                onChange={(e) => setFormData({ ...formData, LastName: e.target.value })}
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">Course</label>
-                            <select
-                                required
-                                value={formData.CourseID}
-                                onChange={(e) => setFormData({ ...formData, CourseID: e.target.value })}
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                            >
-                                <option value="">Select course</option>
-                                {courses.map(c => <option key={c.CourseID} value={c.CourseID}>{c.CourseCode}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">Section</label>
-                            <select
-                                required
-                                value={formData.SectionID}
-                                onChange={(e) => setFormData({ ...formData, SectionID: e.target.value })}
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                            >
-                                <option value="">Select section</option>
-                                {sections.map(s => <option key={s.SectionID} value={s.SectionID}>{s.SectionName}</option>)}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">Year Level</label>
-                            <select
-                                value={formData.YearLevel}
-                                onChange={(e) => setFormData({ ...formData, YearLevel: e.target.value })}
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                            >
-                                <option value="1">1st Year</option>
-                                <option value="2">2nd Year</option>
-                                <option value="3">3rd Year</option>
-                                <option value="4">4th Year</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">Status</label>
-                            <select
-                                value={formData.Status}
-                                onChange={(e) => setFormData({ ...formData, Status: e.target.value })}
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                            >
-                                <option>Enrolled</option>
-                                <option>Not Enrolled</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Email Address</label>
-                        <input
-                            type="email" placeholder="student@school.edu"
-                            value={formData.Email}
-                            onChange={(e) => setFormData({ ...formData, Email: e.target.value })}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Phone Number</label>
-                        <input
-                            type="text" placeholder="0917XXXXXXX"
-                            value={formData.ContactNumber}
-                            onChange={(e) => setFormData({ ...formData, ContactNumber: e.target.value })}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                        />
-                    </div>
-
-                    <div className="pt-3 flex items-center justify-end space-x-2">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                            Cancel
-                        </button>
-                        <button type="submit" className="px-4 py-2 text-xs font-semibold bg-[#1b2537] hover:bg-[#25324c] text-white rounded-lg transition-colors shadow-sm">
-                            {submitLabel}
-                        </button>
-                    </div>
-                </form>
-            </div>
         </div>
     );
 }
@@ -552,9 +554,12 @@ function ScannerPlaceholder({ type }) {
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Clock className="w-8 h-8" />
             </div>
-            <h2 className="text-lg font-bold text-slate-800">{type} Scanner Module</h2>
+            <h2 className="text-lg font-bold text-slate-800">
+                {type} Scanner Module
+            </h2>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Connect your RFID / Barcode scanner device to record student attendance in real time.
+                Connect your RFID / Barcode scanner device to record student
+                attendance in real time.
             </p>
             <div className="mt-6 inline-flex items-center space-x-2 bg-slate-100 text-slate-600 text-xs font-medium px-4 py-2 rounded-lg">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
@@ -570,9 +575,12 @@ function ReportPlaceholder() {
             <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FileText className="w-8 h-8" />
             </div>
-            <h2 className="text-lg font-bold text-slate-800">Report Management</h2>
+            <h2 className="text-lg font-bold text-slate-800">
+                Report Management
+            </h2>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Generate detailed daily, weekly, or monthly student attendance and entry/exit logs.
+                Generate detailed daily, weekly, or monthly student attendance
+                and entry/exit logs.
             </p>
         </div>
     );
