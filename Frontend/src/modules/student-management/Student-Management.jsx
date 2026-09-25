@@ -37,6 +37,7 @@ const emptyForm = {
     Address: "",
     ContactNumber: "",
     Email: "",
+    ProfilePicture: "",
     CourseID: "",
     SectionID: "",
     YearLevel: 1,
@@ -209,6 +210,7 @@ export default function StudentManagementModule() {
             DateOfBirth: student.DateOfBirth || "",
             Gender: student.Gender || "",
             Address: student.Address || "",
+            ProfilePicture: student.ProfilePicture || "",
             CourseID: student.CourseID,
             SectionID: student.SectionID,
             YearLevel: student.YearLevel,
@@ -366,6 +368,8 @@ export default function StudentManagementModule() {
                                 <th className="py-4 px-4">SECTION</th>
                                 <th className="py-4 px-4">YEAR</th>
                                 <th className="py-4 px-6">CONTACT</th>
+                                <th className="py-4 px-6">ADDRESS</th>
+                                <th className="py-4 px-6">EMAIL</th>
                                 <th className="py-4 px-4">STATUS</th>
                                 <th className="py-4 px-6 text-right">
                                     ACTIONS
@@ -415,13 +419,17 @@ export default function StudentManagementModule() {
                                         <td className="py-3.5 px-4 text-slate-600 font-medium">
                                             {student.YearLevel}
                                         </td>
-                                        <td className="py-3.5 px-6">
-                                            <div className="text-slate-500 text-[11px] font-medium leading-snug">
-                                                <div>{student.Email}</div>
-                                                <div className="text-slate-400 text-[10px]">
-                                                    {student.ContactNumber}
-                                                </div>
-                                            </div>
+                                        <td className="py-3.5 px-6 text-slate-500 text-[11px] font-medium">
+                                            {student.ContactNumber || "—"}
+                                        </td>
+                                        <td
+                                            className="py-3.5 px-6 text-slate-500 text-[11px] font-medium max-w-[180px] truncate"
+                                            title={student.Address}
+                                        >
+                                            {student.Address || "—"}
+                                        </td>
+                                        <td className="py-3.5 px-6 text-slate-500 text-[11px] font-medium">
+                                            {student.Email || "—"}
                                         </td>
                                         <td className="py-3.5 px-4">
                                             {student.Status === "Enrolled" ? (

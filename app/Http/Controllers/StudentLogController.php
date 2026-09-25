@@ -11,7 +11,9 @@ class StudentLogController extends Controller
 {
     public function index()
     {
-        return StudentLog::all();
+        return StudentLog::with(['student.course', 'student.section'])
+            ->orderByDesc('ScannedAt')
+            ->get();
     }
 
     public function store(Request $request)
