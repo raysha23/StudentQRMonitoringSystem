@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -10,23 +9,29 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
+#[Fillable(['Username', 'PasswordHash', 'FirstName', 'LastName', 'Status'])]
+#[Hidden(['PasswordHash', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
+    protected $primaryKey = 'UserID';
+    protected $table = 'users_custom';
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * Tell Laravel's auth system to check this column instead of the
+     * default "password" column when hashing/verifying credentials.
      */
+    protected $authPasswordName = 'PasswordHash';
+
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'PasswordHash' => 'hashed',
         ];
+    }
+    public function getRouteKeyName(): string
+    {
+        return 'UserID';
     }
 }
