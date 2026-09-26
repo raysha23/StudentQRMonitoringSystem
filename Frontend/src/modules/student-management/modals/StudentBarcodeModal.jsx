@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
-import { X, Printer, Loader2, AlertTriangle } from "lucide-react";
+import { X, Download, Loader2, AlertTriangle } from "lucide-react";
 import { getStudentBarcode } from "../../../api/student-barcode-api";
 
 export default function StudentBarcodeModal({ student, onClose }) {
@@ -59,30 +59,68 @@ export default function StudentBarcodeModal({ student, onClose }) {
         }
     }, [barcode]);
 
-    const handlePrint = () => {
+    const handleDownload = () => {
         if (!svgRef.current || !barcode) return;
 
-        const svgMarkup = new XMLSerializer().serializeToString(svgRef.current);
         const fullName = `${student.FirstName} ${student.LastName}`;
+        const padding = 20;
+        const headerHeight = 60; // space reserved for name + student number text
 
-        const printWindow = window.open("", "_blank", "width=420,height=320");
-        printWindow.document.write(`
-            <html>
-                <head><title>Student Barcode - ${barcode.BarcodeValue}</title></head>
-                <body style="text-align:center; font-family: sans-serif; margin-top: 24px;">
-                    <div style="font-weight:bold; font-size:14px; margin-bottom:4px;">${fullName}</div>
-                    <div style="font-size:11px; color:#666; margin-bottom:12px;">${student.StudentNumber}</div>
-                    ${svgMarkup}
-                    <script>
-                        window.onload = function () {
-                            window.print();
-                            window.close();
-                        };
-                    </script>
-                </body>
-            </html>
-        `);
-        printWindow.document.close();
+        // Read the SVG's actual rendered size so the canvas matches it exactly
+        const svgRect = svgRef.current.getBoundingClientRect();
+        const svgWidth = svgRect.width || 300;
+        const svgHeight = svgRect.height || 100;
+
+        const svgMarkup = new XMLSerializer().serializeToString(svgRef.current);
+        const svgBlob = new Blob([svgMarkup], {
+            type: "image/svg+xml;charset=utf-8",
+        });
+        const svgUrl = URL.createObjectURL(svgBlob);
+
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = svgWidth + padding * 2;
+            canvas.height = svgHeight + headerHeight + padding * 2;
+
+            const ctx = canvas.getContext("2d");
+
+            // White background (canvases default to transparent)
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Name + student number header text
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#1e293b";
+            ctx.font = "bold 16px sans-serif";
+            ctx.fillText(fullName, canvas.width / 2, padding + 18);
+
+            ctx.fillStyle = "#64748b";
+            ctx.font = "12px sans-serif";
+            ctx.fillText(student.StudentNumber, canvas.width / 2, padding + 38);
+
+            // Draw the barcode itself below the header text
+            ctx.drawImage(
+                img,
+                padding,
+                headerHeight + padding,
+                svgWidth,
+                svgHeight,
+            );
+
+            URL.revokeObjectURL(svgUrl);
+
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+                const downloadUrl = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `barcode-${student.StudentNumber}.png`;
+                link.click();
+                URL.revokeObjectURL(downloadUrl);
+            }, "image/png");
+        };
+        img.src = svgUrl;
     };
 
     if (!student) return null;
@@ -138,12 +176,12 @@ export default function StudentBarcodeModal({ student, onClose }) {
                     )}
 
                     <button
-                        onClick={handlePrint}
+                        onClick={handleDownload}
                         disabled={loading || !!error || !barcode}
                         className="mt-5 w-full flex items-center justify-center space-x-2 bg-[#1b2537] hover:bg-[#25324c] text-white text-xs font-bold px-4 py-2.5 rounded-lg transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <Printer className="w-4 h-4" />
-                        <span>Print Barcode</span>
+                        <Download className="w-4 h-4" />
+                        <span>Download Barcode</span>
                     </button>
                 </div>
             </div>

@@ -1,9 +1,9 @@
-// File path: Frontend\src\modules\student-management\modals\StudentFormModal.jsx
+// File path: Frontend\src\modules\student-management\StudentFormPage.jsx
 
 import React from "react";
-import { X, Camera } from "lucide-react";
+import { ArrowLeft, Camera } from "lucide-react";
 
-export default function StudentFormModal({
+export default function StudentFormPage({
     title,
     formData,
     setFormData,
@@ -24,31 +24,37 @@ export default function StudentFormModal({
     )}`;
 
     return (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8">
-                {/* Header */}
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="font-bold text-slate-800 text-sm">
+        <div className="space-y-6 max-w-[1400px] mx-auto">
+            {/* Header */}
+            <div className="flex items-center gap-3">
+                <button
+                    onClick={onClose}
+                    className="text-slate-400 hover:text-slate-600 rounded-lg p-2 -ml-2 transition-colors"
+                    title="Back"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                    <h1 className="text-lg font-bold text-slate-800 leading-none">
                         {title}
-                    </h3>
-                    <button
-                        onClick={onClose}
-                        className="text-slate-400 hover:text-slate-600 rounded-lg p-1"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
+                    </h1>
+                    <p className="text-xs text-slate-400 mt-1 font-medium">
+                        School Administration
+                    </p>
                 </div>
+            </div>
 
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
                 <form
                     onSubmit={onSubmit}
-                    className="grid grid-cols-1 md:grid-cols-[1fr_1fr] max-h-[75vh]"
+                    className="grid grid-cols-1 lg:grid-cols-[1fr_1fr]"
                 >
-                    <aside className="bg-slate-50 border-r border-slate-100 p-6 flex flex-col items-center justify-center md:sticky md:top-0">
+                    <aside className="bg-slate-50 md:border-r border-slate-100 p-6 flex flex-col items-center justify-center">
                         <div className="relative group">
                             <img
                                 src={formData.ProfilePicture || avatarUrl}
                                 alt="Student avatar preview"
-                                className="w-52 h-52 rounded-full object-cover border-4 border-white shadow-lg bg-slate-100"
+                                className="w-64 h-64 sm:w-72 sm:h-72 lg:w-80 lg:h-80 rounded-full object-cover border-4 border-white shadow-lg bg-slate-100"
                             />
 
                             <input
@@ -63,13 +69,17 @@ export default function StudentFormModal({
                                         alert("Image is too large. Max 2MB.");
                                         return;
                                     }
-                                    const reader = new FileReader();
-                                    reader.onload = () =>
-                                        setFormData({
-                                            ...formData,
-                                            ProfilePicture: reader.result,
-                                        });
-                                    reader.readAsDataURL(file);
+                                    // Keep the real File object for upload...
+                                    setFormData({
+                                        ...formData,
+                                        ProfilePictureFile: file,
+                                    });
+                                    // ...and a throwaway blob URL just for the preview.
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        ProfilePicture:
+                                            URL.createObjectURL(file),
+                                    }));
                                 }}
                             />
 
@@ -110,27 +120,8 @@ export default function StudentFormModal({
                     </aside>
 
                     {/* ============ RIGHT COLUMN: FORM FIELDS ============ */}
-                    <div className="p-5 space-y-4 overflow-y-auto">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">
-                                Student Number
-                            </label>
-                            <input
-                                type="text"
-                                required
-                                placeholder="2025-0001"
-                                value={formData.StudentNumber}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        StudentNumber: e.target.value,
-                                    })
-                                }
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-3">
+                    <div className="p-5 space-y-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">
                                     First Name
@@ -138,6 +129,7 @@ export default function StudentFormModal({
                                 <input
                                     type="text"
                                     required
+                                    placeholder="Juan"
                                     value={formData.FirstName}
                                     onChange={(e) =>
                                         setFormData({
@@ -149,11 +141,15 @@ export default function StudentFormModal({
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                                    Middle Name
+                                <label className="flex items-baseline gap-x-1 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
+                                    <span>Middle Name</span>
+                                    <span className="font-normal text-slate-400 text-[11px]">
+                                        (Optional)
+                                    </span>
                                 </label>
                                 <input
                                     type="text"
+                                    placeholder="Santos"
                                     value={formData.MiddleName}
                                     onChange={(e) =>
                                         setFormData({
@@ -171,6 +167,7 @@ export default function StudentFormModal({
                                 <input
                                     type="text"
                                     required
+                                    placeholder="Dela Cruz"
                                     value={formData.LastName}
                                     onChange={(e) =>
                                         setFormData({
@@ -183,14 +180,12 @@ export default function StudentFormModal({
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">
                                     Suffix
                                 </label>
-                                <input
-                                    type="text"
-                                    placeholder="Jr., Sr., III"
+                                <select
                                     value={formData.Suffix}
                                     onChange={(e) =>
                                         setFormData({
@@ -199,7 +194,13 @@ export default function StudentFormModal({
                                         })
                                     }
                                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                                />
+                                >
+                                    <option value="">None</option>
+                                    <option value="Jr.">Jr.</option>
+                                    <option value="Sr.">Sr.</option>
+                                    <option value="II">II</option>
+                                    <option value="III">III</option>
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -256,7 +257,7 @@ export default function StudentFormModal({
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">
                                     Course
@@ -311,7 +312,7 @@ export default function StudentFormModal({
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">
                                     Year Level

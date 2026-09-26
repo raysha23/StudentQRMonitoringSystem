@@ -13,8 +13,8 @@ import {
 } from "lucide-react";
 
 import StudentBarcodeModal from "./modals/StudentBarcodeModal";
-import StudentFormModal from "./modals/StudentFormModal";
-import StudentViewModal from "./modals/StudentViewModal";
+import StudentFormPage from "./StudentFormPage";
+import DeleteConfirmModal from "./modals/DeleteConfirmModal";
 
 import {
     getStudents,
@@ -58,13 +58,16 @@ export default function StudentManagementModule() {
     const [selectedYear, setSelectedYear] = useState("All Year Levels");
     const [selectedStatus, setSelectedStatus] = useState("All Status");
 
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [formMode, setFormMode] = useState(null); // null | "add" | "edit"
+
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [formData, setFormData] = useState(emptyForm);
 
     const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
+    const [studentToDelete, setStudentToDelete] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const studentsPerPage = 15;
+
     useEffect(() => {
         loadAll();
     }, []);
@@ -104,6 +107,10 @@ export default function StudentManagementModule() {
         return { total, active, inactive };
     }, [students]);
 
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, selectedCourse, selectedYear, selectedStatus]);
+
     const filteredStudents = useMemo(() => {
         return students.filter((student) => {
             const fullName =
@@ -141,25 +148,49 @@ export default function StudentManagementModule() {
         sections,
     ]);
 
-    const buildPayload = () => ({
-        ...formData,
-        MiddleName: formData.MiddleName || null,
-        Suffix: formData.Suffix || null,
-        DateOfBirth: formData.DateOfBirth || null,
-        Gender: formData.Gender || null,
-        Address: formData.Address || null,
-        CourseID: Number(formData.CourseID),
-        SectionID: Number(formData.SectionID),
-        YearLevel: Number(formData.YearLevel),
-        SchoolYearID: Number(formData.SchoolYearID),
-    });
+    const totalPages = Math.max(
+        1,
+        Math.ceil(filteredStudents.length / studentsPerPage),
+    );
+
+    const paginatedStudents = useMemo(() => {
+        const start = (currentPage - 1) * studentsPerPage;
+        return filteredStudents.slice(start, start + studentsPerPage);
+    }, [filteredStudents, currentPage]);
+
+    const buildFormData = () => {
+        const fd = new FormData();
+        fd.append("StudentNumber", formData.StudentNumber);
+        fd.append("FirstName", formData.FirstName);
+        if (formData.MiddleName) fd.append("MiddleName", formData.MiddleName);
+        fd.append("LastName", formData.LastName);
+        if (formData.Suffix) fd.append("Suffix", formData.Suffix);
+        if (formData.DateOfBirth)
+            fd.append("DateOfBirth", formData.DateOfBirth);
+        if (formData.Gender) fd.append("Gender", formData.Gender);
+        if (formData.Address) fd.append("Address", formData.Address);
+        fd.append("ContactNumber", formData.ContactNumber || "");
+        fd.append("Email", formData.Email || "");
+        fd.append("CourseID", Number(formData.CourseID));
+        fd.append("SectionID", Number(formData.SectionID));
+        fd.append("YearLevel", Number(formData.YearLevel));
+        fd.append("SchoolYearID", Number(formData.SchoolYearID));
+        fd.append("Status", formData.Status);
+
+        // Only attach a file if the user actually picked a new one
+        if (formData.ProfilePictureFile) {
+            fd.append("ProfilePicture", formData.ProfilePictureFile);
+        }
+
+        return fd;
+    };
 
     const handleCreateStudent = async (e) => {
         e.preventDefault();
         try {
-            const res = await createStudent(buildPayload());
+            const res = await createStudent(buildFormData());
             setStudents([res.data, ...students]);
-            setIsAddModalOpen(false);
+            setFormMode(null);
             resetForm();
         } catch (err) {
             alert("Failed to create student. Check console for details.");
@@ -170,16 +201,15 @@ export default function StudentManagementModule() {
     const handleUpdateStudent = async (e) => {
         e.preventDefault();
         try {
-            const res = await updateStudent(
-                selectedStudent.StudentID,
-                buildPayload(),
-            );
+            const fd = buildFormData();
+            fd.append("_method", "PUT"); // Laravel method-spoofing for multipart PUT
+            const res = await updateStudent(selectedStudent.StudentID, fd);
             setStudents(
                 students.map((s) =>
                     s.StudentID === selectedStudent.StudentID ? res.data : s,
                 ),
             );
-            setIsEditModalOpen(false);
+            setFormMode(null);
             setSelectedStudent(null);
         } catch (err) {
             alert("Failed to update student. Check console for details.");
@@ -187,12 +217,16 @@ export default function StudentManagementModule() {
         }
     };
 
-    const handleDeleteStudent = async (id) => {
-        if (!confirm("Are you sure you want to delete this student record?"))
-            return;
+    const handleDeleteStudent = async () => {
+        if (!studentToDelete) return;
         try {
-            await deleteStudent(id);
-            setStudents(students.filter((s) => s.StudentID !== id));
+            await deleteStudent(studentToDelete.StudentID);
+            setStudents(
+                students.filter(
+                    (s) => s.StudentID !== studentToDelete.StudentID,
+                ),
+            );
+            setStudentToDelete(null);
         } catch (err) {
             alert("Failed to delete student.");
             console.error(err.response?.data || err);
@@ -210,7 +244,7 @@ export default function StudentManagementModule() {
             DateOfBirth: student.DateOfBirth || "",
             Gender: student.Gender || "",
             Address: student.Address || "",
-            ProfilePicture: student.ProfilePicture || "",
+            ProfilePicture: student.ProfilePictureUrl || "",
             CourseID: student.CourseID,
             SectionID: student.SectionID,
             YearLevel: student.YearLevel,
@@ -219,12 +253,7 @@ export default function StudentManagementModule() {
             ContactNumber: student.ContactNumber || "",
             Status: student.Status,
         });
-        setIsEditModalOpen(true);
-    };
-
-    const openViewModal = (student) => {
-        setSelectedStudent(student);
-        setIsViewModalOpen(true);
+        setFormMode("edit");
     };
 
     const resetForm = () => setFormData(emptyForm);
@@ -251,6 +280,36 @@ export default function StudentManagementModule() {
         );
     }
 
+    if (formMode) {
+        return (
+            <StudentFormPage
+                title={
+                    formMode === "add"
+                        ? "Add New Student"
+                        : `Edit Student (${selectedStudent?.StudentNumber})`
+                }
+                formData={formData}
+                setFormData={setFormData}
+                courses={courses}
+                sections={sections}
+                schoolYears={schoolYears}
+                onSubmit={
+                    formMode === "add"
+                        ? handleCreateStudent
+                        : handleUpdateStudent
+                }
+                onClose={() => {
+                    setFormMode(null);
+                    setSelectedStudent(null);
+                    resetForm();
+                }}
+                submitLabel={
+                    formMode === "add" ? "Save Student" : "Update Student"
+                }
+            />
+        );
+    }
+
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto">
             <div>
@@ -262,34 +321,34 @@ export default function StudentManagementModule() {
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm transition-all hover:shadow-md">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
+                <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-100 shadow-sm transition-all hover:shadow-md">
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                         TOTAL STUDENTS
                     </p>
-                    <p className="text-3xl font-extrabold text-slate-800 mt-2">
+                    <p className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-2">
                         {metrics.total}
                     </p>
                 </div>
-                <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm transition-all hover:shadow-md">
+                <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-100 shadow-sm transition-all hover:shadow-md">
                     <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">
                         ENROLLED
                     </p>
-                    <p className="text-3xl font-extrabold text-emerald-500 mt-2">
+                    <p className="text-2xl sm:text-3xl font-extrabold text-emerald-500 mt-2">
                         {metrics.active}
                     </p>
                 </div>
-                <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm transition-all hover:shadow-md">
+                <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-100 shadow-sm transition-all hover:shadow-md">
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                         NOT ENROLLED
                     </p>
-                    <p className="text-3xl font-extrabold text-slate-700 mt-2">
+                    <p className="text-2xl sm:text-3xl font-extrabold text-slate-700 mt-2">
                         {metrics.inactive}
                     </p>
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
+            <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="relative w-full md:w-80">
                     <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -301,12 +360,12 @@ export default function StudentManagementModule() {
                     />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 lg:gap-3 w-full lg:w-auto">
                     <div className="relative">
                         <select
                             value={selectedCourse}
                             onChange={(e) => setSelectedCourse(e.target.value)}
-                            className="appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors"
+                            className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors truncate"
                         >
                             <option>All Courses</option>
                             {courses.map((c) => (
@@ -320,7 +379,7 @@ export default function StudentManagementModule() {
                         <select
                             value={selectedYear}
                             onChange={(e) => setSelectedYear(e.target.value)}
-                            className="appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors"
+                            className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors truncate"
                         >
                             <option>All Year Levels</option>
                             <option value="1">1st Year</option>
@@ -335,7 +394,7 @@ export default function StudentManagementModule() {
                         <select
                             value={selectedStatus}
                             onChange={(e) => setSelectedStatus(e.target.value)}
-                            className="appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors"
+                            className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors truncate"
                         >
                             <option>All Status</option>
                             <option>Enrolled</option>
@@ -347,9 +406,9 @@ export default function StudentManagementModule() {
                     <button
                         onClick={() => {
                             resetForm();
-                            setIsAddModalOpen(true);
+                            setFormMode("add");
                         }}
-                        className="flex items-center space-x-1.5 bg-[#1b2537] hover:bg-[#25324c] text-white text-xs font-bold px-4 py-2 rounded-lg transition-all shadow-sm active:scale-95 ml-2"
+                        className="flex items-center justify-center space-x-1.5 bg-[#1b2537] hover:bg-[#25324c] text-white text-xs font-bold px-4 py-2 rounded-lg transition-all shadow-sm active:scale-95 whitespace-nowrap"
                     >
                         <Plus className="w-4 h-4" />
                         <span>Add Student</span>
@@ -359,7 +418,7 @@ export default function StudentManagementModule() {
 
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead>
                             <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                                 <th className="py-4 px-6">STUDENT</th>
@@ -377,8 +436,8 @@ export default function StudentManagementModule() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs">
-                            {filteredStudents.length > 0 ? (
-                                filteredStudents.map((student) => (
+                            {paginatedStudents.length > 0 ? (
+                                paginatedStudents.map((student) => (
                                     <tr
                                         key={student.StudentID}
                                         className="hover:bg-slate-50/70 transition-colors group"
@@ -387,7 +446,7 @@ export default function StudentManagementModule() {
                                             <div className="flex items-center gap-3">
                                                 <img
                                                     src={
-                                                        student.ProfilePicture ||
+                                                        student.ProfilePictureUrl ||
                                                         `https://api.dicebear.com/9.x/initials/svg?seed=${student.FirstName}-${student.LastName}`
                                                     }
                                                     alt={`${student.FirstName} ${student.LastName}`}
@@ -423,7 +482,7 @@ export default function StudentManagementModule() {
                                             {student.ContactNumber || "—"}
                                         </td>
                                         <td
-                                            className="py-3.5 px-6 text-slate-500 text-[11px] font-medium max-w-[180px] truncate"
+                                            className="py-3.5 px-6 text-slate-500 text-[11px] font-medium"
                                             title={student.Address}
                                         >
                                             {student.Address || "—"}
@@ -444,15 +503,6 @@ export default function StudentManagementModule() {
                                         </td>
                                         <td className="py-3.5 px-6 text-right">
                                             <div className="flex items-center justify-end space-x-2 text-slate-400">
-                                                <button
-                                                    onClick={() =>
-                                                        openViewModal(student)
-                                                    }
-                                                    title="View Details"
-                                                    className="p-1 hover:text-slate-600 rounded transition-colors"
-                                                >
-                                                    <LayoutGrid className="w-4 h-4" />
-                                                </button>
                                                 <button
                                                     onClick={() => {
                                                         setSelectedStudent(
@@ -478,8 +528,8 @@ export default function StudentManagementModule() {
                                                 </button>
                                                 <button
                                                     onClick={() =>
-                                                        handleDeleteStudent(
-                                                            student.StudentID,
+                                                        setStudentToDelete(
+                                                            student,
                                                         )
                                                     }
                                                     title="Delete Student"
@@ -505,22 +555,48 @@ export default function StudentManagementModule() {
                         </tbody>
                     </table>
                 </div>
-            </div>
 
-            {/* --- MODAL: ADD STUDENT --- */}
-            {isAddModalOpen && (
-                <StudentFormModal
-                    title="Add New Student"
-                    formData={formData}
-                    setFormData={setFormData}
-                    courses={courses}
-                    sections={sections}
-                    schoolYears={schoolYears}
-                    onSubmit={handleCreateStudent}
-                    onClose={() => setIsAddModalOpen(false)}
-                    submitLabel="Save Student"
-                />
-            )}
+                {filteredStudents.length > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-slate-100">
+                        <p className="text-[11px] text-slate-400 font-medium">
+                            Showing {(currentPage - 1) * studentsPerPage + 1}–
+                            {Math.min(
+                                currentPage * studentsPerPage,
+                                filteredStudents.length,
+                            )}{" "}
+                            of {filteredStudents.length}
+                        </p>
+
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                onClick={() =>
+                                    setCurrentPage((p) => Math.max(1, p - 1))
+                                }
+                                disabled={currentPage === 1}
+                                className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                            >
+                                Previous
+                            </button>
+
+                            <span className="px-2 text-xs font-semibold text-slate-500 whitespace-nowrap">
+                                Page {currentPage} of {totalPages}
+                            </span>
+
+                            <button
+                                onClick={() =>
+                                    setCurrentPage((p) =>
+                                        Math.min(totalPages, p + 1),
+                                    )
+                                }
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
 
             {isBarcodeModalOpen && selectedStudent && (
                 <StudentBarcodeModal
@@ -529,67 +605,14 @@ export default function StudentManagementModule() {
                 />
             )}
 
-            {/* --- MODAL: EDIT STUDENT --- */}
-            {isEditModalOpen && selectedStudent && (
-                <StudentFormModal
-                    title={`Edit Student (${selectedStudent.StudentNumber})`}
-                    formData={formData}
-                    setFormData={setFormData}
-                    courses={courses}
-                    sections={sections}
-                    schoolYears={schoolYears}
-                    onSubmit={handleUpdateStudent}
-                    onClose={() => setIsEditModalOpen(false)}
-                    submitLabel="Update Student"
+            {studentToDelete && (
+                <DeleteConfirmModal
+                    title="Delete Student"
+                    message={`Are you sure you want to delete ${studentToDelete.FirstName} ${studentToDelete.LastName}? This action cannot be undone.`}
+                    onConfirm={handleDeleteStudent}
+                    onClose={() => setStudentToDelete(null)}
                 />
             )}
-
-            {isViewModalOpen && selectedStudent && (
-                <StudentViewModal
-                    student={selectedStudent}
-                    courseName={courseName}
-                    sectionName={sectionName}
-                    onClose={() => setIsViewModalOpen(false)}
-                />
-            )}
-        </div>
-    );
-}
-
-function ScannerPlaceholder({ type }) {
-    return (
-        <div className="bg-white rounded-xl p-12 border border-slate-100 shadow-sm text-center max-w-xl mx-auto mt-12">
-            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Clock className="w-8 h-8" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-800">
-                {type} Scanner Module
-            </h2>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Connect your RFID / Barcode scanner device to record student
-                attendance in real time.
-            </p>
-            <div className="mt-6 inline-flex items-center space-x-2 bg-slate-100 text-slate-600 text-xs font-medium px-4 py-2 rounded-lg">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                <span>Awaiting device input...</span>
-            </div>
-        </div>
-    );
-}
-
-function ReportPlaceholder() {
-    return (
-        <div className="bg-white rounded-xl p-12 border border-slate-100 shadow-sm text-center max-w-xl mx-auto mt-12">
-            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-8 h-8" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-800">
-                Report Management
-            </h2>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Generate detailed daily, weekly, or monthly student attendance
-                and entry/exit logs.
-            </p>
         </div>
     );
 }

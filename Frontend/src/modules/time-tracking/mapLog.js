@@ -2,6 +2,8 @@ export function mapLogToRecord(log) {
     const student = log.student || {};
     return {
         id: String(log.LogID),
+        logType: log.LogType, // "TIME IN" or "TIME OUT" — now decided server-side
+        __scannedAt: log.ScannedAt, // raw timestamp, kept only for sorting merged lists
         time: new Date(log.ScannedAt).toLocaleTimeString("en-US", {
             hour: "2-digit",
             minute: "2-digit",

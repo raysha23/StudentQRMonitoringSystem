@@ -9,9 +9,19 @@ use Illuminate\Support\Facades\DB;
 
 class StudentLogController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return StudentLog::with(['student.course', 'student.section'])
+        $validated = $request->validate([
+            'FromDate' => 'nullable|date',
+            'ToDate' => 'nullable|date',
+        ]);
+
+        $fromDate = $validated['FromDate'] ?? today()->toDateString();
+        $toDate = $validated['ToDate'] ?? today()->toDateString();
+
+        return StudentLog::with(['student.course', 'student.section', 'student.schoolYear'])
+            ->whereDate('ScannedAt', '>=', $fromDate)
+            ->whereDate('ScannedAt', '<=', $toDate)
             ->orderByDesc('ScannedAt')
             ->get();
     }
@@ -64,7 +74,6 @@ class StudentLogController extends Controller
     {
         $validated = $request->validate([
             'BarcodeValue' => 'required|string',
-            'LogType' => 'required|string|in:TIME IN,TIME OUT',
             'ScannerID' => 'required|integer|exists:scanners,ScannerID',
         ]);
 
@@ -84,28 +93,40 @@ class StudentLogController extends Controller
             ], 422);
         }
 
-        $recentDuplicate = StudentLog::where('StudentID', $barcode->StudentID)
-            ->where('LogType', $validated['LogType'])
-            ->where('ScannedAt', '>=', now()->subSeconds(60))
-            ->exists();
+        // // Guard against the same physical tap/scan firing twice in a row
+        // $recentAny = StudentLog::where('StudentID', $barcode->StudentID)
+        //     ->where('ScannedAt', '>=', now()->subSeconds(60))
+        //     ->exists();
 
-        if ($recentDuplicate) {
-            return response()->json([
-                'message' => "{$barcode->student->FirstName} was already scanned for {$validated['LogType']} moments ago.",
-            ], 409);
-        }
+        // if ($recentAny) {
+        //     return response()->json([
+        //         'message' => "{$barcode->student->FirstName} was already scanned moments ago.",
+        //     ], 409);
+        // }
 
-        $log = DB::transaction(function () use ($barcode, $validated) {
+        // Auto-determine Time In vs Time Out from this student's most recent
+        // log today: no log yet, or last log was a Time Out, means this scan
+        // is a Time In. Otherwise it's a Time Out.
+        $lastLogToday = StudentLog::where('StudentID', $barcode->StudentID)
+            ->whereDate('ScannedAt', today())
+            ->orderByDesc('ScannedAt')
+            ->first();
+
+        $logType = (!$lastLogToday || $lastLogToday->LogType === 'TIME OUT')
+            ? 'TIME IN'
+            : 'TIME OUT';
+
+        $log = DB::transaction(function () use ($barcode, $validated, $logType) {
             return StudentLog::create([
                 'StudentID' => $barcode->StudentID,
                 'BarcodeID' => $barcode->BarcodeID,
-                'LogType' => $validated['LogType'],
+                'LogType' => $logType,
                 'ScannedAt' => now(),
                 'ScannerID' => $validated['ScannerID'],
             ]);
         });
 
-        $log->load(['student.course', 'student.section']);
+        $log->load(['student.course', 'student.section', 'student.schoolYear']);
 
         return response()->json($log, 201);
     }
@@ -118,7 +139,7 @@ class StudentLogController extends Controller
 
         $logs = StudentLog::where('LogType', $validated['LogType'])
             ->whereDate('ScannedAt', today())
-            ->with(['student.course', 'student.section'])
+            ->with(['student.course', 'student.section', 'student.schoolYear'])
             ->orderByDesc('ScannedAt')
             ->limit(50)
             ->get();

@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Student extends Model
 {
+    use HasFactory;
     protected $table = 'students';
     protected $primaryKey = 'StudentID';
     const CREATED_AT = 'CreatedAt';
@@ -29,6 +31,23 @@ class Student extends Model
         'SchoolYearID',
         'Status',
     ];
+
+    protected $appends = ['ProfilePictureUrl'];
+
+    public function getProfilePictureUrlAttribute()
+    {
+        if (!$this->ProfilePicture) {
+            return null;
+        }
+
+        // Already a full URL (e.g. seeded DiceBear placeholder) — use as-is.
+        if (str_starts_with($this->ProfilePicture, 'http://') || str_starts_with($this->ProfilePicture, 'https://')) {
+            return $this->ProfilePicture;
+        }
+
+        // Otherwise it's a relative path from storeAsWebp() — build the full URL.
+        return asset('storage/' . $this->ProfilePicture);
+    }
 
     public function course()
     {

@@ -1,6 +1,12 @@
 import api from "./client";
 
-export const getStudentLogs = () => api.get("/student-logs");
+export const getStudentLogs = (fromDate, toDate) =>
+    api.get("/student-logs", {
+        params: {
+            FromDate: fromDate,
+            ToDate: toDate,
+        },
+    });
 
 export const getStudentLog = (id) => api.get(`/student-logs/${id}`);
 

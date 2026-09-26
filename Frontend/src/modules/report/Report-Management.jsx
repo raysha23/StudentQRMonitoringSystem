@@ -3,35 +3,74 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Search, Download, Calendar, Filter } from "lucide-react";
 import { getStudentLogs } from "../../api/student-log-api";
+import { getCourses } from "../../api/course-api";
+import { getSchoolYears } from "../../api/school-year-api";
+import { getSections } from "../../api/section-api";
 
 export default function ReportManagement() {
     const [logs, setLogs] = useState([]);
+    const [courses, setCourses] = useState([]);
+    const [schoolYears, setSchoolYears] = useState([]);
+    const [sections, setSections] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const [fromDate, setFromDate] = useState("2026-09-25");
-    const [toDate, setToDate] = useState("2026-09-25");
+    const todayString = new Date().toISOString().split("T")[0];
+    const [fromDate, setFromDate] = useState(todayString);
+    const [toDate, setToDate] = useState(todayString);
+
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCourse, setSelectedCourse] = useState("All");
     const [selectedSection, setSelectedSection] = useState("All");
     const [selectedType, setSelectedType] = useState("All");
+    const [selectedSchoolYear, setSelectedSchoolYear] = useState("All");
+    const [currentPage, setCurrentPage] = useState(1);
+    const logsPerPage = 15;
+
+    useEffect(() => {
+        loadFilters();
+    }, []);
 
     useEffect(() => {
         loadLogs();
-    }, []);
+    }, [fromDate, toDate]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [
+        searchQuery,
+        selectedCourse,
+        selectedSection,
+        selectedType,
+        selectedSchoolYear,
+        fromDate,
+        toDate,
+    ]);
 
     const loadLogs = async () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await getStudentLogs();
-            console.log(res.data[0]); // TEMP: check field names
+            const res = await getStudentLogs(fromDate, toDate);
             setLogs(res.data);
         } catch (err) {
             setError("Failed to load logs. Is the backend running?");
             console.error(err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadFilters = async () => {
+        try {
+            const [coursesRes, schoolYearsRes, sectionsRes] = await Promise.all(
+                [getCourses(), getSchoolYears(), getSections()],
+            );
+            setCourses(coursesRes.data);
+            setSchoolYears(schoolYearsRes.data);
+            setSections(sectionsRes.data);
+        } catch (err) {
+            console.error("Failed to load filter options", err);
         }
     };
 
@@ -53,12 +92,36 @@ export default function ReportManagement() {
                 log.student?.section?.SectionName === selectedSection;
             const matchesType =
                 selectedType === "All" || log.LogType === selectedType;
+            const matchesSchoolYear =
+                selectedSchoolYear === "All" ||
+                log.student?.schoolYear?.SchoolYearName === selectedSchoolYear;
 
             return (
-                matchesSearch && matchesCourse && matchesSection && matchesType
+                matchesSearch &&
+                matchesCourse &&
+                matchesSection &&
+                matchesType &&
+                matchesSchoolYear
             );
         });
-    }, [logs, searchQuery, selectedCourse, selectedSection, selectedType]);
+    }, [
+        logs,
+        searchQuery,
+        selectedCourse,
+        selectedSection,
+        selectedType,
+        selectedSchoolYear,
+    ]);
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(filteredLogs.length / logsPerPage),
+    );
+
+    const paginatedLogs = useMemo(() => {
+        const start = (currentPage - 1) * logsPerPage;
+        return filteredLogs.slice(start, start + logsPerPage);
+    }, [filteredLogs, currentPage]);
 
     // Statistics
     const totalRecords = filteredLogs.length;
@@ -70,30 +133,82 @@ export default function ReportManagement() {
     ).length;
 
     // Export to CSV Function
+    // Parses a ScannedAt value robustly. Laravel sometimes returns a MySQL-style
+    // "2026-09-26 08:00:00" timestamp (space instead of "T"), which some browsers
+    // fail to parse as a valid Date, silently producing an empty/invalid time.
+    const parseScannedAt = (value) => {
+        if (!value) return null;
+        const normalized =
+            typeof value === "string" ? value.replace(" ", "T") : value;
+        const parsed = new Date(normalized);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    // Export to CSV Function
     const handleExportCSV = () => {
         const headers = [
-            "LOG ID",
+            "STUDENT NUMBER",
             "STUDENT NAME",
-            "STUDENT ID",
             "COURSE",
             "SECTION",
+            "SCHOOL YEAR",
             "YEAR",
             "TYPE",
-            "DATE & TIME",
+            "DATE",
+            "TIME",
         ];
-        const rows = filteredLogs.map((log) => [
-            log.LogID,
-            `${log.student?.FirstName ?? ""} ${log.student?.LastName ?? ""}`.trim(),
-            log.StudentID,
-            log.student?.course?.CourseName ?? "",
-            log.student?.section?.SectionName ?? "",
-            log.student?.YearLevel ?? "",
-            log.LogType,
-            log.ScannedAt,
-        ]);
+
+        const escapeCsvField = (value) => {
+            const str = String(value ?? "");
+            // Wrap in quotes and escape any internal quotes, so commas or
+            // quote characters inside a name/address never shift columns.
+            return `"${str.replace(/"/g, '""')}"`;
+        };
+
+        // Excel auto-detects quoted date/time-looking strings and converts them
+        // to real date/time serials, which then show as "######" in a narrow
+        // column. Wrapping in ="..." forces Excel to treat it as literal text.
+        const forceTextInExcel = (value) => `="${value}"`;
+
+        const rows = filteredLogs.map((log) => {
+            const scannedDate = parseScannedAt(log.ScannedAt);
+            const datePart = scannedDate
+                ? scannedDate.toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                  })
+                : "—";
+            const timePart = scannedDate
+                ? scannedDate.toLocaleTimeString("en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      hour12: true,
+                  })
+                : "—";
+
+            return [
+                log.student?.StudentNumber ?? "",
+                `${log.student?.FirstName ?? ""} ${log.student?.LastName ?? ""}`.trim(),
+                log.student?.course?.CourseName ?? "",
+                log.student?.section?.SectionName ?? "",
+                log.student?.schoolYear?.SchoolYearName ?? "",
+                log.student?.YearLevel ?? "",
+                log.LogType,
+                forceTextInExcel(datePart),
+                forceTextInExcel(timePart),
+            ];
+        });
+
+        const titleRow = [`Monitoring Report (${fromDate} to ${toDate})`];
+        const blankRow = [""];
+
         const csvContent =
             "data:text/csv;charset=utf-8," +
-            [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+            [titleRow, blankRow, headers, ...rows]
+                .map((row) => row.map(escapeCsvField).join(","))
+                .join("\n");
 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
@@ -114,9 +229,6 @@ export default function ReportManagement() {
                 <h1 className="text-lg font-bold text-slate-800 leading-none">
                     Report Management
                 </h1>
-                <p className="text-xs text-slate-400 mt-1 font-medium">
-                    Sep 25, 2026 - School Administration
-                </p>
             </div>
 
             {/* TOP SUMMARY CARDS */}
@@ -203,13 +315,29 @@ export default function ReportManagement() {
                             className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
                             <option value="All">All Courses</option>
-                            <option value="BSBA">BSBA</option>
-                            <option value="BSCS">BSCS</option>
-                            <option value="BSIT">BSIT</option>
-                            <option value="BSEd">BSEd</option>
-                            <option value="BSN">BSN</option>
-                            <option value="BSCPE">BSCPE</option>
-                            <option value="BSEE">BSEE</option>
+                            {courses.map((c) => (
+                                <option key={c.CourseID} value={c.CourseName}>
+                                    {c.CourseCode}
+                                </option>
+                            ))}
+                        </select>
+                        {/* School Year Dropdown */}
+                        <select
+                            value={selectedSchoolYear}
+                            onChange={(e) =>
+                                setSelectedSchoolYear(e.target.value)
+                            }
+                            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        >
+                            <option value="All">All School Years</option>
+                            {schoolYears.map((sy) => (
+                                <option
+                                    key={sy.SchoolYearID}
+                                    value={sy.SchoolYearName}
+                                >
+                                    {sy.SchoolYearName}
+                                </option>
+                            ))}
                         </select>
 
                         {/* Section Dropdown */}
@@ -219,10 +347,11 @@ export default function ReportManagement() {
                             className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
                             <option value="All">All Sections</option>
-                            <option value="A">Section A</option>
-                            <option value="B">Section B</option>
-                            <option value="C">Section C</option>
-                            <option value="D">Section D</option>
+                            {sections.map((s) => (
+                                <option key={s.SectionID} value={s.SectionName}>
+                                    {s.SectionName}
+                                </option>
+                            ))}
                         </select>
 
                         {/* Types Dropdown */}
@@ -254,28 +383,27 @@ export default function ReportManagement() {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                                <th className="py-3 px-4">LOG ID</th>
+                                <th className="py-3 px-4">STUDENT NUMBER</th>
                                 <th className="py-3 px-4">STUDENT</th>
                                 <th className="py-3 px-4">COURSE</th>
                                 <th className="py-3 px-4">SECTION</th>
+                                <th className="py-3 px-4">SCHOOL YEAR</th>
                                 <th className="py-3 px-4">YEAR</th>
                                 <th className="py-3 px-4">TYPE</th>
                                 <th className="py-3 px-4">DATE & TIME</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                            {filteredLogs.length > 0 ? (
-                                filteredLogs.map((log, index) => (
+                            {paginatedLogs.length > 0 ? (
+                                paginatedLogs.map((log, index) => (
                                     <tr
                                         key={index}
                                         className="hover:bg-slate-50/80 transition"
                                     >
-                                        {/* Log ID */}
-                                        {/* Log ID */}
+                                        {/* Student Number */}
                                         <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                                            L-{log.LogID}
+                                            {log.student?.StudentNumber ?? "—"}
                                         </td>
-
                                         {/* Student Avatar, Name & ID */}
                                         <td className="py-3 px-4">
                                             <div className="flex items-center space-x-3">
@@ -293,9 +421,6 @@ export default function ReportManagement() {
                                                         {log.student?.FirstName}{" "}
                                                         {log.student?.LastName}
                                                     </p>
-                                                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                                        {log.StudentID}
-                                                    </p>
                                                 </div>
                                             </div>
                                         </td>
@@ -311,7 +436,11 @@ export default function ReportManagement() {
                                             {log.student?.section
                                                 ?.SectionName ?? "—"}
                                         </td>
-
+                                        {/* School Year */}
+                                        <td className="py-3 px-4 text-slate-500">
+                                            {log.student?.schoolYear
+                                                ?.SchoolYearName ?? "—"}
+                                        </td>
                                         {/* Year */}
                                         <td className="py-3 px-4 text-slate-500">
                                             {log.student?.YearLevel ?? "—"}
@@ -339,7 +468,7 @@ export default function ReportManagement() {
                             ) : (
                                 <tr>
                                     <td
-                                        colSpan="7"
+                                        colSpan="8"
                                         className="py-8 text-center text-slate-400 text-xs"
                                     >
                                         No log records found matching the
@@ -352,24 +481,42 @@ export default function ReportManagement() {
                 </div>
 
                 {/* PAGINATION FOOTER */}
-                <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                {/* PAGINATION FOOTER */}
+                <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
                     <span>
-                        Showing 1-{filteredLogs.length} of {filteredLogs.length}{" "}
-                        records
+                        Showing{" "}
+                        {filteredLogs.length === 0
+                            ? 0
+                            : (currentPage - 1) * logsPerPage + 1}
+                        -
+                        {Math.min(
+                            currentPage * logsPerPage,
+                            filteredLogs.length,
+                        )}{" "}
+                        of {filteredLogs.length} records
                     </span>
                     <div className="flex items-center space-x-2">
                         <button
-                            disabled
-                            className="px-2 py-1 text-slate-300 font-medium cursor-not-allowed"
+                            onClick={() =>
+                                setCurrentPage((p) => Math.max(1, p - 1))
+                            }
+                            disabled={currentPage === 1}
+                            className="px-2 py-1 text-slate-500 font-medium hover:text-slate-700 disabled:text-slate-300 disabled:cursor-not-allowed transition-colors"
                         >
                             &larr; Prev
                         </button>
                         <button className="w-7 h-7 bg-blue-900 text-white rounded font-bold flex items-center justify-center">
-                            1
+                            {currentPage}
                         </button>
+                        <span className="text-slate-400">of {totalPages}</span>
                         <button
-                            disabled
-                            className="px-2 py-1 text-slate-300 font-medium cursor-not-allowed"
+                            onClick={() =>
+                                setCurrentPage((p) =>
+                                    Math.min(totalPages, p + 1),
+                                )
+                            }
+                            disabled={currentPage === totalPages}
+                            className="px-2 py-1 text-slate-500 font-medium hover:text-slate-700 disabled:text-slate-300 disabled:cursor-not-allowed transition-colors"
                         >
                             Next &rarr;
                         </button>
