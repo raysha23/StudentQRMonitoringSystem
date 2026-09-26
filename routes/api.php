@@ -8,6 +8,7 @@ use App\Http\Controllers\ScannerController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\StudentBarcodeController;
 use App\Http\Controllers\StudentLogController;
+use App\Http\Controllers\AuthController;
 
 // --------------------------------------------------------------------------
 // System Management Routes
@@ -36,3 +37,13 @@ Route::controller(StudentLogController::class)->group(function () {
 });
 
 Route::apiResource('student-logs', StudentLogController::class);
+
+// --------------------------------------------------------------------------
+// Auth Routes
+// --------------------------------------------------------------------------
+Route::post('/login', [AuthController::class, 'login']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me', [AuthController::class, 'me']);
+});

@@ -49,7 +49,7 @@ const THEMES = {
 // (the page header, the scanner input box itself before anything is scanned).
 const NEUTRAL_THEME = THEMES["TIME IN"];
 
-const CARD_LIFETIME_MS = 5000;
+const CARD_LIFETIME_MS = 10000;
 
 export default function TimeTracking({ scannerId = 1 }) {
     const [currentTime, setCurrentTime] = useState(new Date());
@@ -63,7 +63,7 @@ export default function TimeTracking({ scannerId = 1 }) {
     const inputRef = useRef(null);
 
     useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(new Date()), 5000);
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
 
