@@ -59,10 +59,5 @@ class DatabaseSeeder extends Seeder
             'ScannerType' => 'QR',
             'Status' => 'Active',
         ]);
-
-        Student::factory()
-            ->count(100)
-            ->create()
-            ->each(fn($student) => StudentBarcode::generateFor($student));
     }
 }

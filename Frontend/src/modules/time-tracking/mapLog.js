@@ -1,20 +1,17 @@
+import {
+    formatDate,
+    formatTime12Hour,
+    parseScannedAt,
+    yearSuffix,
+} from "../../utils/global-helper";
 export function mapLogToRecord(log) {
     const student = log.student || {};
     return {
         id: String(log.LogID),
         logType: log.LogType, // "TIME IN" or "TIME OUT" — now decided server-side
         __scannedAt: log.ScannedAt, // raw timestamp, kept only for sorting merged lists
-        time: new Date(log.ScannedAt).toLocaleTimeString("en-US", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: true,
-        }),
-        date: new Date(log.ScannedAt).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-        }),
+        time: formatTime12Hour(parseScannedAt(log.ScannedAt)),
+        date: formatDate(parseScannedAt(log.ScannedAt)),
         student: {
             id: student.StudentNumber,
             name: `${student.FirstName ?? ""} ${student.LastName ?? ""}`.trim(),
@@ -29,11 +26,4 @@ export function mapLogToRecord(log) {
                 `https://api.dicebear.com/9.x/initials/svg?seed=${student.FirstName}-${student.LastName}`,
         },
     };
-}
-
-function yearSuffix(n) {
-    if (n === 1) return "st";
-    if (n === 2) return "nd";
-    if (n === 3) return "rd";
-    return "th";
 }

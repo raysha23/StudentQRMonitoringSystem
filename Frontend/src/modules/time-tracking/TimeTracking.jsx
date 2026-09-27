@@ -5,6 +5,10 @@ import { QrCode, CheckCircle, Menu, X, AlertTriangle } from "lucide-react";
 import ScanRecordCard from "./ScanRecordCard";
 import { scanBarcode, getTodayLogs } from "../../api/student-log-api";
 import { mapLogToRecord } from "./mapLog";
+import {
+    formatTime12HourWithSeconds,
+    formatDate,
+} from "../../utils/global-helper";
 
 const THEMES = {
     "TIME IN": {
@@ -139,21 +143,6 @@ export default function TimeTracking({ scannerId = 1 }) {
         [scanInput, isScanning, scannerId],
     );
 
-    const formatTime = (date) =>
-        date.toLocaleTimeString("en-US", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: true,
-        });
-
-    const formatDate = (date) =>
-        date.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-        });
-
     return (
         <div className="p-6 bg-slate-50 min-h-screen text-slate-800 font-sans space-y-6">
             {/* Module Header */}
@@ -183,7 +172,7 @@ export default function TimeTracking({ scannerId = 1 }) {
                         {formatDate(currentTime)}
                     </p>
                     <h1 className="text-4xl font-bold tracking-tight tabular-nums font-mono leading-none text-slate-800">
-                        {formatTime(currentTime)}
+                        {formatTime12HourWithSeconds(currentTime)}
                     </h1>
                 </div>
             </div>

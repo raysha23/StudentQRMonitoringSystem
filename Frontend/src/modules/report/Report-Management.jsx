@@ -6,7 +6,7 @@ import { getStudentLogs } from "../../api/student-log-api";
 import { getCourses } from "../../api/course-api";
 import { getSchoolYears } from "../../api/school-year-api";
 import { getSections } from "../../api/section-api";
-
+import { parseScannedAt, formatLogDateTime } from "../../utils/global-helper";
 export default function ReportManagement() {
     const [logs, setLogs] = useState([]);
     const [courses, setCourses] = useState([]);
@@ -132,17 +132,6 @@ export default function ReportManagement() {
         (log) => log.LogType === "TIME OUT",
     ).length;
 
-    // Export to CSV Function
-    // Parses a ScannedAt value robustly. Laravel sometimes returns a MySQL-style
-    // "2026-09-26 08:00:00" timestamp (space instead of "T"), which some browsers
-    // fail to parse as a valid Date, silently producing an empty/invalid time.
-    const parseScannedAt = (value) => {
-        if (!value) return null;
-        const normalized =
-            typeof value === "string" ? value.replace(" ", "T") : value;
-        const parsed = new Date(normalized);
-        return isNaN(parsed.getTime()) ? null : parsed;
-    };
 
     // Export to CSV Function
     const handleExportCSV = () => {
@@ -265,46 +254,48 @@ export default function ReportManagement() {
             </div>
 
             {/* FILTERS & SEARCH BAR */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3">
-                <div className="flex items-center space-x-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    <Filter className="w-3.5 h-3.5" />
+            <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-xs space-y-2.5 sm:space-y-3">
+                <div className="flex items-center space-x-2 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <Filter className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     <span>FILTER RECORDS</span>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-col gap-2.5 sm:gap-3 lg:flex-row lg:items-center lg:justify-between">
                     {/* Left Side Controls: Date pickers, Search, Dropdowns */}
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-nowrap lg:items-center gap-2 sm:gap-2.5 lg:gap-2 overflow-x-auto lg:pb-1">
                         {/* Date From */}
-                        <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs">
-                            <span className="text-slate-400">From</span>
+                        <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs lg:shrink-0">
+                            <span className="text-slate-400 shrink-0">
+                                From
+                            </span>
                             <input
                                 type="date"
                                 value={fromDate}
                                 onChange={(e) => setFromDate(e.target.value)}
-                                className="bg-transparent border-none text-slate-700 font-medium focus:outline-none cursor-pointer"
+                                className="w-full lg:w-28 bg-transparent border-none text-slate-700 font-medium focus:outline-none cursor-pointer"
                             />
                         </div>
 
                         {/* Date To */}
-                        <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs">
-                            <span className="text-slate-400">To</span>
+                        <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs lg:shrink-0">
+                            <span className="text-slate-400 shrink-0">To</span>
                             <input
                                 type="date"
                                 value={toDate}
                                 onChange={(e) => setToDate(e.target.value)}
-                                className="bg-transparent border-none text-slate-700 font-medium focus:outline-none cursor-pointer"
+                                className="w-full lg:w-28 bg-transparent border-none text-slate-700 font-medium focus:outline-none cursor-pointer"
                             />
                         </div>
 
                         {/* Search Input */}
-                        <div className="relative">
-                            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <div className="relative sm:col-span-2 lg:col-span-1 lg:shrink-0">
+                            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2" />
                             <input
                                 type="text"
                                 placeholder="Search student..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+                                className="w-full lg:w-36 pl-8 sm:pl-9 pr-3 py-1 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
@@ -312,7 +303,7 @@ export default function ReportManagement() {
                         <select
                             value={selectedCourse}
                             onChange={(e) => setSelectedCourse(e.target.value)}
-                            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            className="w-full lg:w-28 lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
                             <option value="All">All Courses</option>
                             {courses.map((c) => (
@@ -321,13 +312,14 @@ export default function ReportManagement() {
                                 </option>
                             ))}
                         </select>
+
                         {/* School Year Dropdown */}
                         <select
                             value={selectedSchoolYear}
                             onChange={(e) =>
                                 setSelectedSchoolYear(e.target.value)
                             }
-                            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            className="w-full lg:w-32 lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
                             <option value="All">All School Years</option>
                             {schoolYears.map((sy) => (
@@ -344,7 +336,7 @@ export default function ReportManagement() {
                         <select
                             value={selectedSection}
                             onChange={(e) => setSelectedSection(e.target.value)}
-                            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            className="w-full lg:w-28 lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
                             <option value="All">All Sections</option>
                             {sections.map((s) => (
@@ -358,7 +350,7 @@ export default function ReportManagement() {
                         <select
                             value={selectedType}
                             onChange={(e) => setSelectedType(e.target.value)}
-                            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            className="w-full lg:w-28 lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
                             <option value="All">All Types</option>
                             <option value="TIME IN">TIME IN</option>
@@ -369,9 +361,9 @@ export default function ReportManagement() {
                     {/* Right Side: Export CSV Button */}
                     <button
                         onClick={handleExportCSV}
-                        className="inline-flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-2 rounded-lg transition shadow-xs"
+                        className="inline-flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] sm:text-xs px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg transition shadow-xs w-full lg:w-auto lg:shrink-0"
                     >
-                        <Download className="w-3.5 h-3.5" />
+                        <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                         <span>Export CSV</span>
                     </button>
                 </div>
@@ -460,8 +452,8 @@ export default function ReportManagement() {
                                         </td>
 
                                         {/* Date & Time */}
-                                        <td className="py-3 px-4 font-medium text-slate-500">
-                                            {log.ScannedAt}
+                                        <td className="py-3 px-4 font-medium text-slate-500 whitespace-nowrap">
+                                            {formatLogDateTime(log.ScannedAt)}
                                         </td>
                                     </tr>
                                 ))

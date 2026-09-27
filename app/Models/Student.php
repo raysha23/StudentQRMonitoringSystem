@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Student extends Model
 {
-    use HasFactory;
+    // use HasFactory;
     protected $table = 'students';
     protected $primaryKey = 'StudentID';
     const CREATED_AT = 'CreatedAt';
@@ -33,6 +33,16 @@ class Student extends Model
     ];
 
     protected $appends = ['ProfilePictureUrl'];
+
+    protected function casts(): array
+    {
+        return [
+            'CourseID' => 'integer',
+            'SectionID' => 'integer',
+            'YearLevel' => 'integer',
+            'SchoolYearID' => 'integer',
+        ];
+    }
 
     public function getProfilePictureUrlAttribute()
     {
