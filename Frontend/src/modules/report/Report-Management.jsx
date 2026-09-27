@@ -7,6 +7,7 @@ import { getCourses } from "../../api/course-api";
 import { getSchoolYears } from "../../api/school-year-api";
 import { getSections } from "../../api/section-api";
 import { parseScannedAt, formatLogDateTime } from "../../utils/global-helper";
+import { exportLogsToExcel } from "../../utils/csv-export";
 export default function ReportManagement() {
     const [logs, setLogs] = useState([]);
     const [courses, setCourses] = useState([]);
@@ -132,83 +133,9 @@ export default function ReportManagement() {
         (log) => log.LogType === "TIME OUT",
     ).length;
 
-
-    // Export to CSV Function
-    const handleExportCSV = () => {
-        const headers = [
-            "STUDENT NUMBER",
-            "STUDENT NAME",
-            "COURSE",
-            "SECTION",
-            "SCHOOL YEAR",
-            "YEAR",
-            "TYPE",
-            "DATE",
-            "TIME",
-        ];
-
-        const escapeCsvField = (value) => {
-            const str = String(value ?? "");
-            // Wrap in quotes and escape any internal quotes, so commas or
-            // quote characters inside a name/address never shift columns.
-            return `"${str.replace(/"/g, '""')}"`;
-        };
-
-        // Excel auto-detects quoted date/time-looking strings and converts them
-        // to real date/time serials, which then show as "######" in a narrow
-        // column. Wrapping in ="..." forces Excel to treat it as literal text.
-        const forceTextInExcel = (value) => `="${value}"`;
-
-        const rows = filteredLogs.map((log) => {
-            const scannedDate = parseScannedAt(log.ScannedAt);
-            const datePart = scannedDate
-                ? scannedDate.toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                  })
-                : "—";
-            const timePart = scannedDate
-                ? scannedDate.toLocaleTimeString("en-US", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      second: "2-digit",
-                      hour12: true,
-                  })
-                : "—";
-
-            return [
-                log.student?.StudentNumber ?? "",
-                `${log.student?.FirstName ?? ""} ${log.student?.LastName ?? ""}`.trim(),
-                log.student?.course?.CourseName ?? "",
-                log.student?.section?.SectionName ?? "",
-                log.student?.schoolYear?.SchoolYearName ?? "",
-                log.student?.YearLevel ?? "",
-                log.LogType,
-                forceTextInExcel(datePart),
-                forceTextInExcel(timePart),
-            ];
-        });
-
-        const titleRow = [`Monitoring Report (${fromDate} to ${toDate})`];
-        const blankRow = [""];
-
-        const csvContent =
-            "data:text/csv;charset=utf-8," +
-            [titleRow, blankRow, headers, ...rows]
-                .map((row) => row.map(escapeCsvField).join(","))
-                .join("\n");
-
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute(
-            "download",
-            `Attendance_Report_${fromDate}_to_${toDate}.csv`,
-        );
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    // Export to Excel Function
+    const handleExportCSV = async () => {
+        await exportLogsToExcel(filteredLogs, fromDate, toDate);
     };
 
     return (
@@ -472,7 +399,6 @@ export default function ReportManagement() {
                     </table>
                 </div>
 
-                {/* PAGINATION FOOTER */}
                 {/* PAGINATION FOOTER */}
                 <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
                     <span>

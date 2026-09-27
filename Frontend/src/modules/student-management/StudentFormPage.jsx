@@ -1,6 +1,6 @@
 // File path: Frontend\src\modules\student-management\StudentFormPage.jsx
 
-import React from "react";
+import React, { useState } from "react";
 import { ArrowLeft, Camera } from "lucide-react";
 
 export default function StudentFormPage({
@@ -14,6 +14,42 @@ export default function StudentFormPage({
     onClose,
     submitLabel,
 }) {
+    const [errors, setErrors] = useState({});
+
+    const NAME_REGEX = /^[A-Za-z\s.'-]*$/; // letters, spaces, periods, apostrophes, hyphens — no digits
+    const PHONE_REGEX = /^09\d{9}$/; // exactly 11 digits, starting with 09
+
+    const validate = () => {
+        const newErrors = {};
+
+        if (!NAME_REGEX.test(formData.FirstName)) {
+            newErrors.FirstName = "First name cannot contain numbers.";
+        }
+        if (formData.MiddleName && !NAME_REGEX.test(formData.MiddleName)) {
+            newErrors.MiddleName = "Middle name cannot contain numbers.";
+        }
+        if (!NAME_REGEX.test(formData.LastName)) {
+            newErrors.LastName = "Last name cannot contain numbers.";
+        }
+
+        if (
+            formData.ContactNumber &&
+            !PHONE_REGEX.test(formData.ContactNumber)
+        ) {
+            newErrors.ContactNumber =
+                "Phone number must be 11 digits and start with 09.";
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!validate()) return;
+        onSubmit(e);
+    };
+
     // Compute initials-based avatar preview
     const fullName = `${formData.FirstName || ""} ${
         formData.LastName || ""
@@ -46,7 +82,7 @@ export default function StudentFormPage({
 
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
                 <form
-                    onSubmit={onSubmit}
+                    onSubmit={handleSubmit}
                     className="grid grid-cols-1 lg:grid-cols-[1fr_1fr]"
                 >
                     <aside className="bg-slate-50 md:border-r border-slate-100 p-6 flex flex-col items-center justify-center">
@@ -131,14 +167,25 @@ export default function StudentFormPage({
                                     required
                                     placeholder="Juan"
                                     value={formData.FirstName}
-                                    onChange={(e) =>
+                                    onChange={(e) => {
+                                        if (!NAME_REGEX.test(e.target.value))
+                                            return;
                                         setFormData({
                                             ...formData,
                                             FirstName: e.target.value,
-                                        })
-                                    }
-                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
+                                        });
+                                    }}
+                                    className={`w-full px-3 py-2 border rounded-lg text-xs font-medium focus:ring-2 focus:outline-none ${
+                                        errors.FirstName
+                                            ? "border-rose-400 focus:ring-rose-200"
+                                            : "border-slate-200 focus:ring-slate-300"
+                                    }`}
                                 />
+                                {errors.FirstName && (
+                                    <p className="mt-1 text-[11px] text-rose-500 font-medium">
+                                        {errors.FirstName}
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <label className="flex items-baseline gap-x-1 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
@@ -405,18 +452,34 @@ export default function StudentFormPage({
                             </label>
                             <input
                                 type="text"
-                                placeholder="0917XXXXXXX"
+                                inputMode="numeric"
+                                maxLength={11}
+                                placeholder="09XXXXXXXXX"
                                 value={formData.ContactNumber}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                    const digitsOnly = e.target.value.replace(
+                                        /\D/g,
+                                        "",
+                                    );
+                                    if (digitsOnly.length > 11) return;
                                     setFormData({
                                         ...formData,
-                                        ContactNumber: e.target.value,
-                                    })
-                                }
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
+                                        ContactNumber: digitsOnly,
+                                    });
+                                }}
+                                className={`w-full px-3 py-2 border rounded-lg text-xs font-medium focus:ring-2 focus:outline-none ${
+                                    errors.ContactNumber
+                                        ? "border-rose-400 focus:ring-rose-200"
+                                        : "border-slate-200 focus:ring-slate-300"
+                                }`}
                             />
+                            {errors.ContactNumber && (
+                                <p className="mt-1 text-[11px] text-rose-500 font-medium">
+                                    {errors.ContactNumber}
+                                </p>
+                            )}
                         </div>
-
+                        
                         <div className="pt-3 flex items-center justify-end space-x-2 border-t border-slate-100">
                             <button
                                 type="button"

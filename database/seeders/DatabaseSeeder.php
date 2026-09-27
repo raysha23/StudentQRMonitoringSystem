@@ -27,11 +27,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $courses = collect([
-            ['CourseCode' => 'BSIT', 'CourseName' => 'BS Information Technology', 'Status' => 'Active'],
-            ['CourseCode' => 'BSCS', 'CourseName' => 'BS Computer Science', 'Status' => 'Active'],
-            ['CourseCode' => 'BSED', 'CourseName' => 'BS Education', 'Status' => 'Active'],
-            ['CourseCode' => 'BSBA', 'CourseName' => 'BS Business Administration', 'Status' => 'Active'],
-            ['CourseCode' => 'BSA', 'CourseName' => 'BS Accountancy', 'Status' => 'Active'],
+            ['CourseCode' => 'BSIT', 'CourseName' => 'BS Industrial Technology', 'Status' => 'Active'],
         ])->map(fn($c) => Course::create($c));
 
         $schoolYear = SchoolYear::create([
@@ -42,11 +38,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $sections = collect([
-            ['SectionName' => 'IT-1A', 'CourseID' => $courses[0]->CourseID, 'YearLevel' => 1, 'Adviser' => 'Prof. Santos'],
-            ['SectionName' => 'CS-1A', 'CourseID' => $courses[1]->CourseID, 'YearLevel' => 1, 'Adviser' => 'Prof. Reyes'],
-            ['SectionName' => 'ED-2A', 'CourseID' => $courses[2]->CourseID, 'YearLevel' => 2, 'Adviser' => 'Prof. Cruz'],
-            ['SectionName' => 'BA-1A', 'CourseID' => $courses[3]->CourseID, 'YearLevel' => 1, 'Adviser' => 'Prof. Garcia'],
-            ['SectionName' => 'ACC-3A', 'CourseID' => $courses[4]->CourseID, 'YearLevel' => 3, 'Adviser' => 'Prof. Lopez'],
+            ['SectionName' => 'Charity', 'CourseID' => $courses[0]->CourseID, 'YearLevel' => 1, 'Adviser' => 'Prof. Santos'],
         ])->map(fn($s) => Section::create($s + [
             'SchoolYearID' => $schoolYear->SchoolYearID,
             'Status' => 'Active',
@@ -56,7 +48,7 @@ class DatabaseSeeder extends Seeder
             'ScannerName' => 'Main Gate Scanner',
             'DeviceName' => 'ESP32-CAM-01',
             'Location' => 'Main Entrance',
-            'ScannerType' => 'QR',
+            'ScannerType' => 'Barcode',
             'Status' => 'Active',
         ]);
     }
