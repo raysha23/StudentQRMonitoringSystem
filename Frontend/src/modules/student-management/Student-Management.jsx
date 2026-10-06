@@ -482,8 +482,8 @@ export default function StudentManagementModule() {
                                                         {student.FirstName}{" "}
                                                         {student.MiddleName
                                                             ? student.MiddleName.charAt(
-                                                                  0,
-                                                              ) + ". "
+                                                                0,
+                                                            ) + ". "
                                                             : ""}
                                                         {student.LastName}
                                                         {student.Suffix
@@ -518,7 +518,7 @@ export default function StudentManagementModule() {
                                             </td>
                                             <td className="py-3.5 px-4">
                                                 {student.Status ===
-                                                "Enrolled" ? (
+                                                    "Enrolled" ? (
                                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-medium bg-emerald-100/70 text-emerald-700">
                                                         Enrolled
                                                     </span>
