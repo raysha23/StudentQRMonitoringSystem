@@ -8,9 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('student_barcodes', function (Blueprint $table) {
+        Schema::create('person_barcodes', function (Blueprint $table) {
             $table->id('BarcodeID');
-            $table->foreignId('StudentID')->constrained('students', 'StudentID');
+            // Exactly one of these is filled (enforced in the controller)
+            $table->foreignId('StudentID')->nullable()->constrained('students', 'StudentID');
+            $table->foreignId('EmployeeID')->nullable()->constrained('employees', 'EmployeeID');
             $table->string('BarcodeValue', 255)->unique();
             $table->string('BarcodeFormat', 20);
             $table->string('Status', 20);
@@ -21,6 +23,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('student_barcodes');
+        Schema::dropIfExists('person_barcodes');
     }
 };

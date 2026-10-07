@@ -12,10 +12,10 @@ import {
     Barcode,
 } from "lucide-react";
 
-import StudentBarcodeModal from "./modals/StudentBarcodeModal";
+import BarCodeModal from "../../utils/general-modal/BarCodeModal";
 import StudentFormPage from "./StudentFormPage";
-import DeleteConfirmModal from "./modals/DeleteConfirmModal";
 
+import DeleteConfirmationModal from "../../utils/general-modal/DeleteConfirmationModal";
 import {
     getStudents,
     createStudent,
@@ -222,18 +222,11 @@ export default function StudentManagementModule() {
 
     const handleDeleteStudent = async () => {
         if (!studentToDelete) return;
-        try {
-            await deleteStudent(studentToDelete.StudentID);
-            setStudents(
-                students.filter(
-                    (s) => s.StudentID !== studentToDelete.StudentID,
-                ),
-            );
-            setStudentToDelete(null);
-        } catch (err) {
-            alert("Failed to delete student.");
-            console.error(err.response?.data || err);
-        }
+        await deleteStudent(studentToDelete.StudentID); // throws on failure, the modal shows it
+        setStudents(
+            students.filter((s) => s.StudentID !== studentToDelete.StudentID),
+        );
+        setStudentToDelete(null);
     };
 
     const openEditModal = (student) => {
@@ -631,21 +624,20 @@ export default function StudentManagementModule() {
                 </div>
 
                 {isBarcodeModalOpen && selectedStudent && (
-                    <StudentBarcodeModal
-                        student={selectedStudent}
+                    <BarCodeModal
+                        type="student"
+                        person={selectedStudent}
                         onClose={() => setIsBarcodeModalOpen(false)}
                     />
                 )}
-
                 {studentToDelete && (
-                    <DeleteConfirmModal
+                    <DeleteConfirmationModal
                         title="Delete Student"
                         message={`Are you sure you want to delete ${studentToDelete.FirstName} ${studentToDelete.LastName}? This action cannot be undone.`}
                         onConfirm={handleDeleteStudent}
                         onClose={() => setStudentToDelete(null)}
                     />
                 )}
-
                 {viewingPhotoStudent && (
                     <div
                         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"

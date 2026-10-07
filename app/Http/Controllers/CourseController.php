@@ -4,51 +4,68 @@ namespace App\Http\Controllers;
 
 use App\Models\Course;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class CourseController extends Controller
 {
     public function index()
     {
-        return Course::all();
+        return Course::withCount('sections')->orderBy('CourseCode')->get();
     }
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'CourseCode' => 'required|string|max:50|unique:courses,CourseCode',
-            'CourseName' => 'required|string|max:150',
+        $data = $request->validate([
+            'CourseCode'  => 'required|string|max:50|unique:courses,CourseCode',
+            'CourseName'  => 'required|string|max:150',
             'Description' => 'nullable|string|max:255',
-            'Status' => 'required|string|max:20',
+            'Majors'      => 'nullable|array',
+            'Majors.*'    => 'string|max:100',
         ]);
 
-        $course = Course::create($validated);
+        $data['Status'] = 'Active';
 
-        return response()->json($course, 201);
+        return response()->json(Course::create($data), 201);
     }
 
     public function show(Course $course)
     {
-        return $course;
+        return $course->loadCount('sections');
     }
 
     public function update(Request $request, Course $course)
     {
-        $validated = $request->validate([
-            'CourseCode' => 'required|string|max:50|unique:courses,CourseCode,' . $course->CourseID . ',CourseID',
-            'CourseName' => 'required|string|max:150',
+        $data = $request->validate([
+            'CourseCode'  => [
+                'sometimes',
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('courses', 'CourseCode')->ignore($course->CourseID, 'CourseID')
+            ],
+            'CourseName'  => 'sometimes|required|string|max:150',
             'Description' => 'nullable|string|max:255',
-            'Status' => 'required|string|max:20',
+            'Majors'      => 'nullable|array',
+            'Majors.*'    => 'string|max:100',
+            'Status'      => 'sometimes|in:Active,Inactive',
         ]);
 
-        $course->update($validated);
+        $course->update($data);
 
-        return response()->json($course);
+        return $course->loadCount('sections');
     }
 
     public function destroy(Course $course)
     {
+        if ($course->sections()->exists() || $course->subjects()->exists()) {
+            return response()->json(
+                ['message' => 'Cannot delete a program that still has sections or subjects.'],
+                409
+            );
+        }
+
         $course->delete();
 
-        return response()->json(['message' => 'Course deleted']);
+        return response()->noContent();
     }
 }

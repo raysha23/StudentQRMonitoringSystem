@@ -73,14 +73,14 @@ class Student extends Model
     {
         return $this->belongsTo(SchoolYear::class, 'SchoolYearID', 'SchoolYearID');
     }
-
+    // Student.php and Employee.php, replace any StudentBarcode/StudentLog relations
     public function barcodes()
     {
-        return $this->hasMany(StudentBarcode::class, 'StudentID', 'StudentID');
+        return $this->hasMany(PersonBarcode::class, 'StudentID', 'StudentID'); // Employee: 'EmployeeID', 'EmployeeID'
     }
 
     public function logs()
     {
-        return $this->hasMany(StudentLog::class, 'StudentID', 'StudentID');
+        return $this->hasMany(PersonLog::class, 'StudentID', 'StudentID'); // Employee: 'EmployeeID', 'EmployeeID'
     }
 }

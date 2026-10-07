@@ -1,24 +1,53 @@
+// File Path: Frontend\src\utils\general-modal\BarCodeModal.jsx
 import React, { useEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { X, Download, Loader2, AlertTriangle } from "lucide-react";
-import { getStudentBarcode } from "../../../api/student-barcode-api";
+import {
+    getStudentBarcode,
+    getEmployeeBarcode,
+} from "../../api/person-barcode-api";
 
-export default function StudentBarcodeModal({ student, onClose }) {
+// Everything that differs between a student and an employee lives here
+const PERSON_CONFIG = {
+    student: {
+        title: "Student Barcode",
+        getId: (p) => p.StudentID,
+        getName: (p) => `${p.FirstName ?? ""} ${p.LastName ?? ""}`.trim(),
+        getNumber: (p) => p.StudentNumber,
+        fetchBarcode: (p) => getStudentBarcode(p.StudentID),
+    },
+    employee: {
+        title: "Employee Barcode",
+        getId: (p) => p.EmployeeID,
+        getName: (p) => p.FullName ?? "",
+        getNumber: (p) => p.EmployeeNo,
+        fetchBarcode: (p) => getEmployeeBarcode(p.EmployeeID),
+    },
+};
+
+export default function BarCodeModal({ person, type = "student", onClose }) {
+    const config = PERSON_CONFIG[type] ?? PERSON_CONFIG.student;
+
     const svgRef = useRef(null);
     const [barcode, setBarcode] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const personId = person ? config.getId(person) : null;
+    const name = person ? config.getName(person) : "";
+    const number = person ? config.getNumber(person) : "";
+
     // 1. Fetch the real barcode value from the backend
     useEffect(() => {
         let cancelled = false;
-        if (!student?.StudentID) return;
+        if (!personId) return;
 
         setLoading(true);
         setError(null);
         setBarcode(null);
 
-        getStudentBarcode(student.StudentID)
+        config
+            .fetchBarcode(person)
             .then((res) => {
                 if (!cancelled) setBarcode(res.data);
             })
@@ -27,7 +56,7 @@ export default function StudentBarcodeModal({ student, onClose }) {
                     console.error(err);
                     setError(
                         err.response?.data?.message ||
-                            "Failed to load barcode.",
+                        "Failed to load barcode.",
                     );
                 }
             })
@@ -38,7 +67,8 @@ export default function StudentBarcodeModal({ student, onClose }) {
         return () => {
             cancelled = true;
         };
-    }, [student?.StudentID]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [personId, type]);
 
     // 2. Render JsBarcode once we have the value
     useEffect(() => {
@@ -62,9 +92,8 @@ export default function StudentBarcodeModal({ student, onClose }) {
     const handleDownload = () => {
         if (!svgRef.current || !barcode) return;
 
-        const fullName = `${student.FirstName} ${student.LastName}`;
         const padding = 20;
-        const headerHeight = 60; // space reserved for name + student number text
+        const headerHeight = 60; // space reserved for name + ID number text
 
         // Read the SVG's actual rendered size so the canvas matches it exactly
         const svgRect = svgRef.current.getBoundingClientRect();
@@ -89,15 +118,15 @@ export default function StudentBarcodeModal({ student, onClose }) {
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Name + student number header text
+            // Name + ID number header text
             ctx.textAlign = "center";
             ctx.fillStyle = "#1e293b";
             ctx.font = "bold 16px sans-serif";
-            ctx.fillText(fullName, canvas.width / 2, padding + 18);
+            ctx.fillText(name, canvas.width / 2, padding + 18);
 
             ctx.fillStyle = "#64748b";
             ctx.font = "12px sans-serif";
-            ctx.fillText(student.StudentNumber, canvas.width / 2, padding + 38);
+            ctx.fillText(number, canvas.width / 2, padding + 38);
 
             // Draw the barcode itself below the header text
             ctx.drawImage(
@@ -115,7 +144,7 @@ export default function StudentBarcodeModal({ student, onClose }) {
                 const downloadUrl = URL.createObjectURL(blob);
                 const link = document.createElement("a");
                 link.href = downloadUrl;
-                link.download = `barcode-${student.StudentNumber}.png`;
+                link.download = `barcode-${number}.png`;
                 link.click();
                 URL.revokeObjectURL(downloadUrl);
             }, "image/png");
@@ -123,14 +152,14 @@ export default function StudentBarcodeModal({ student, onClose }) {
         img.src = svgUrl;
     };
 
-    if (!student) return null;
+    if (!person) return null;
 
     return (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150">
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                     <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider">
-                        Student Barcode
+                        {config.title}
                     </h3>
                     <button
                         onClick={onClose}
@@ -141,11 +170,9 @@ export default function StudentBarcodeModal({ student, onClose }) {
                 </div>
 
                 <div className="p-6 text-center">
-                    <h4 className="font-bold text-slate-800 text-sm">
-                        {student.FirstName} {student.LastName}
-                    </h4>
+                    <h4 className="font-bold text-slate-800 text-sm">{name}</h4>
                     <p className="text-[11px] text-slate-400 font-medium mb-4">
-                        {student.StudentNumber}
+                        {number}
                     </p>
 
                     <div className="flex justify-center items-center bg-slate-50 rounded-xl p-4 border border-slate-100 min-h-[130px]">

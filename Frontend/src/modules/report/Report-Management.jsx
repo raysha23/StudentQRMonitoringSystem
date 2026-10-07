@@ -1,13 +1,57 @@
 // File Path: Frontend\src\modules\report\Report-Management.jsx
 
 import React, { useState, useMemo, useEffect } from "react";
-import { Search, Download, Calendar, Filter } from "lucide-react";
-import { getStudentLogs } from "../../api/student-log-api";
+import { Search, Download, Filter } from "lucide-react";
+import { getPersonLogs } from "../../api/person-log-api";
 import { getCourses } from "../../api/course-api";
 import { getSchoolYears } from "../../api/school-year-api";
 import { getSections } from "../../api/section-api";
-import { parseScannedAt, formatLogDateTime } from "../../utils/global-helper";
+import { formatLogDateTime } from "../../utils/global-helper";
 import { exportLogsToExcel } from "../../utils/csv-export";
+
+// Flattens a log's student/employee into one shape the table can use
+const getPerson = (log) => {
+    if (log.student) {
+        const s = log.student;
+        return {
+            type: "Student",
+            number: s.StudentNumber,
+            name: `${s.FirstName ?? ""} ${s.LastName ?? ""}`.trim(),
+            picture: s.ProfilePictureUrl,
+            group: s.course?.CourseName,
+            subgroup: s.section?.SectionName,
+            schoolYear: s.schoolYear?.SchoolYearName,
+            year: s.YearLevel,
+        };
+    }
+    if (log.employee) {
+        const e = log.employee;
+        return {
+            type: "Employee",
+            number: e.EmployeeNo,
+            name: e.FullName ?? "",
+            picture: e.ProfilePictureUrl,
+            group: e.department?.DepartmentName,
+            subgroup: e.position?.PositionTitle,
+            schoolYear: null,
+            year: null,
+        };
+    }
+    return {
+        type: log.PersonType ?? "—",
+        number: null,
+        name: "",
+        picture: null,
+        group: null,
+        subgroup: null,
+        schoolYear: null,
+        year: null,
+    };
+};
+
+const selectCls =
+    "w-full lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+
 export default function ReportManagement() {
     const [logs, setLogs] = useState([]);
     const [courses, setCourses] = useState([]);
@@ -21,6 +65,7 @@ export default function ReportManagement() {
     const [toDate, setToDate] = useState(todayString);
 
     const [searchQuery, setSearchQuery] = useState("");
+    const [selectedPersonType, setSelectedPersonType] = useState("All");
     const [selectedCourse, setSelectedCourse] = useState("All");
     const [selectedSection, setSelectedSection] = useState("All");
     const [selectedType, setSelectedType] = useState("All");
@@ -40,6 +85,7 @@ export default function ReportManagement() {
         setCurrentPage(1);
     }, [
         searchQuery,
+        selectedPersonType,
         selectedCourse,
         selectedSection,
         selectedType,
@@ -52,7 +98,7 @@ export default function ReportManagement() {
         setLoading(true);
         setError(null);
         try {
-            const res = await getStudentLogs(fromDate, toDate);
+            const res = await getPersonLogs(fromDate, toDate);
             setLogs(res.data);
         } catch (err) {
             setError("Failed to load logs. Is the backend running?");
@@ -75,30 +121,49 @@ export default function ReportManagement() {
         }
     };
 
+    const handlePersonTypeChange = (value) => {
+        setSelectedPersonType(value);
+        // Course / section / school year only apply to students
+        if (value === "Employee") {
+            setSelectedCourse("All");
+            setSelectedSection("All");
+            setSelectedSchoolYear("All");
+        }
+    };
+
+    // Attach the flattened person once per load
+    const personLogs = useMemo(
+        () => logs.map((log) => ({ ...log, person: getPerson(log) })),
+        [logs],
+    );
+
     // Filtered dataset
     const filteredLogs = useMemo(() => {
-        return logs.filter((log) => {
-            const fullName =
-                `${log.student?.FirstName ?? ""} ${log.student?.LastName ?? ""}`.toLowerCase();
+        const q = searchQuery.toLowerCase();
+
+        return personLogs.filter((log) => {
+            const p = log.person;
+
             const matchesSearch =
-                fullName.includes(searchQuery.toLowerCase()) ||
-                String(log.StudentID).includes(searchQuery) ||
+                p.name.toLowerCase().includes(q) ||
+                String(p.number ?? "").toLowerCase().includes(q) ||
                 String(log.LogID).includes(searchQuery);
 
+            const matchesPerson =
+                selectedPersonType === "All" || p.type === selectedPersonType;
             const matchesCourse =
-                selectedCourse === "All" ||
-                log.student?.course?.CourseName === selectedCourse;
+                selectedCourse === "All" || p.group === selectedCourse;
             const matchesSection =
-                selectedSection === "All" ||
-                log.student?.section?.SectionName === selectedSection;
+                selectedSection === "All" || p.subgroup === selectedSection;
             const matchesType =
                 selectedType === "All" || log.LogType === selectedType;
             const matchesSchoolYear =
                 selectedSchoolYear === "All" ||
-                log.student?.schoolYear?.SchoolYearName === selectedSchoolYear;
+                p.schoolYear === selectedSchoolYear;
 
             return (
                 matchesSearch &&
+                matchesPerson &&
                 matchesCourse &&
                 matchesSection &&
                 matchesType &&
@@ -106,8 +171,9 @@ export default function ReportManagement() {
             );
         });
     }, [
-        logs,
+        personLogs,
         searchQuery,
+        selectedPersonType,
         selectedCourse,
         selectedSection,
         selectedType,
@@ -138,6 +204,8 @@ export default function ReportManagement() {
         await exportLogsToExcel(filteredLogs, fromDate, toDate);
     };
 
+    const studentFiltersDisabled = selectedPersonType === "Employee";
+
     return (
         <div className="p-6 bg-slate-50 min-h-screen text-slate-800 font-sans space-y-6">
             {/* Module Header */}
@@ -149,7 +217,6 @@ export default function ReportManagement() {
 
             {/* TOP SUMMARY CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* TOTAL RECORDS CARD */}
                 <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         TOTAL RECORDS
@@ -159,7 +226,6 @@ export default function ReportManagement() {
                     </h2>
                 </div>
 
-                {/* TIME IN CARD */}
                 <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600">
                         TIME IN
@@ -169,7 +235,6 @@ export default function ReportManagement() {
                     </h2>
                 </div>
 
-                {/* TIME OUT CARD */}
                 <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
                         TIME OUT
@@ -188,7 +253,6 @@ export default function ReportManagement() {
                 </div>
 
                 <div className="flex flex-col gap-2.5 sm:gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    {/* Left Side Controls: Date pickers, Search, Dropdowns */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-nowrap lg:items-center gap-2 sm:gap-2.5 lg:gap-2 overflow-x-auto lg:pb-1">
                         {/* Date From */}
                         <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs lg:shrink-0">
@@ -219,18 +283,32 @@ export default function ReportManagement() {
                             <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2" />
                             <input
                                 type="text"
-                                placeholder="Search student..."
+                                placeholder="Search name or ID..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full lg:w-36 pl-8 sm:pl-9 pr-3 py-1 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full lg:w-40 pl-8 sm:pl-9 pr-3 py-1 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
-                        {/* Course Dropdown */}
+                        {/* Person Dropdown */}
+                        <select
+                            value={selectedPersonType}
+                            onChange={(e) =>
+                                handlePersonTypeChange(e.target.value)
+                            }
+                            className={`${selectCls} lg:w-28`}
+                        >
+                            <option value="All">All People</option>
+                            <option value="Student">Students</option>
+                            <option value="Employee">Employees</option>
+                        </select>
+
+                        {/* Course Dropdown (students only) */}
                         <select
                             value={selectedCourse}
                             onChange={(e) => setSelectedCourse(e.target.value)}
-                            className="w-full lg:w-28 lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            disabled={studentFiltersDisabled}
+                            className={`${selectCls} lg:w-28`}
                         >
                             <option value="All">All Courses</option>
                             {courses.map((c) => (
@@ -240,13 +318,14 @@ export default function ReportManagement() {
                             ))}
                         </select>
 
-                        {/* School Year Dropdown */}
+                        {/* School Year Dropdown (students only) */}
                         <select
                             value={selectedSchoolYear}
                             onChange={(e) =>
                                 setSelectedSchoolYear(e.target.value)
                             }
-                            className="w-full lg:w-32 lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            disabled={studentFiltersDisabled}
+                            className={`${selectCls} lg:w-32`}
                         >
                             <option value="All">All School Years</option>
                             {schoolYears.map((sy) => (
@@ -259,11 +338,12 @@ export default function ReportManagement() {
                             ))}
                         </select>
 
-                        {/* Section Dropdown */}
+                        {/* Section Dropdown (students only) */}
                         <select
                             value={selectedSection}
                             onChange={(e) => setSelectedSection(e.target.value)}
-                            className="w-full lg:w-28 lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            disabled={studentFiltersDisabled}
+                            className={`${selectCls} lg:w-28`}
                         >
                             <option value="All">All Sections</option>
                             {sections.map((s) => (
@@ -273,11 +353,11 @@ export default function ReportManagement() {
                             ))}
                         </select>
 
-                        {/* Types Dropdown */}
+                        {/* Log Type Dropdown */}
                         <select
                             value={selectedType}
                             onChange={(e) => setSelectedType(e.target.value)}
-                            className="w-full lg:w-28 lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            className={`${selectCls} lg:w-28`}
                         >
                             <option value="All">All Types</option>
                             <option value="TIME IN">TIME IN</option>
@@ -285,7 +365,7 @@ export default function ReportManagement() {
                         </select>
                     </div>
 
-                    {/* Right Side: Export CSV Button */}
+                    {/* Right Side: Export Button */}
                     <button
                         onClick={handleExportCSV}
                         className="inline-flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] sm:text-xs px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg transition shadow-xs w-full lg:w-auto lg:shrink-0"
@@ -296,16 +376,23 @@ export default function ReportManagement() {
                 </div>
             </div>
 
+            {error && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-xl px-4 py-3">
+                    {error}
+                </div>
+            )}
+
             {/* LOGS TABLE */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                                <th className="py-3 px-4">STUDENT NUMBER</th>
-                                <th className="py-3 px-4">STUDENT</th>
-                                <th className="py-3 px-4">COURSE</th>
-                                <th className="py-3 px-4">SECTION</th>
+                                <th className="py-3 px-4">ID NUMBER</th>
+                                <th className="py-3 px-4">NAME</th>
+                                <th className="py-3 px-4">PERSON</th>
+                                <th className="py-3 px-4">COURSE / DEPT</th>
+                                <th className="py-3 px-4">SECTION / POSITION</th>
                                 <th className="py-3 px-4">SCHOOL YEAR</th>
                                 <th className="py-3 px-4">YEAR</th>
                                 <th className="py-3 px-4">TYPE</th>
@@ -313,81 +400,93 @@ export default function ReportManagement() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                            {paginatedLogs.length > 0 ? (
-                                paginatedLogs.map((log, index) => (
-                                    <tr
-                                        key={index}
-                                        className="hover:bg-slate-50/80 transition"
+                            {loading ? (
+                                <tr>
+                                    <td
+                                        colSpan="9"
+                                        className="py-8 text-center text-slate-400 text-xs"
                                     >
-                                        {/* Student Number */}
-                                        <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                                            {log.student?.StudentNumber ?? "—"}
-                                        </td>
-                                        {/* Student Avatar, Name & ID */}
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center space-x-3">
-                                                <img
-                                                    src={
-                                                        log.student
-                                                            ?.ProfilePicture ||
-                                                        `https://api.dicebear.com/9.x/initials/svg?seed=${log.student?.FirstName}-${log.student?.LastName}`
-                                                    }
-                                                    alt={`${log.student?.FirstName ?? ""} ${log.student?.LastName ?? ""}`}
-                                                    className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                                                />
-                                                <div>
+                                        Loading records...
+                                    </td>
+                                </tr>
+                            ) : paginatedLogs.length > 0 ? (
+                                paginatedLogs.map((log) => {
+                                    const p = log.person;
+                                    return (
+                                        <tr
+                                            key={log.LogID}
+                                            className="hover:bg-slate-50/80 transition"
+                                        >
+                                            <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
+                                                {p.number ?? "—"}
+                                            </td>
+
+                                            <td className="py-3 px-4">
+                                                <div className="flex items-center space-x-3">
+                                                    <img
+                                                        src={
+                                                            p.picture ||
+                                                            `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.name)}`
+                                                        }
+                                                        alt={p.name}
+                                                        className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                                                    />
                                                     <p className="font-bold text-slate-800 leading-tight">
-                                                        {log.student?.FirstName}{" "}
-                                                        {log.student?.LastName}
+                                                        {p.name || "—"}
                                                     </p>
                                                 </div>
-                                            </div>
-                                        </td>
+                                            </td>
 
-                                        {/* Course */}
-                                        <td className="py-3 px-4 font-bold text-slate-800">
-                                            {log.student?.course?.CourseName ??
-                                                "—"}
-                                        </td>
+                                            <td className="py-3 px-4">
+                                                {p.type === "Employee" ? (
+                                                    <span className="inline-block bg-purple-50 text-purple-600 border border-purple-200 text-[10px] font-bold px-2.5 py-0.5 rounded-md">
+                                                        Employee
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-block bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-bold px-2.5 py-0.5 rounded-md">
+                                                        {p.type}
+                                                    </span>
+                                                )}
+                                            </td>
 
-                                        {/* Section */}
-                                        <td className="py-3 px-4 text-slate-500">
-                                            {log.student?.section
-                                                ?.SectionName ?? "—"}
-                                        </td>
-                                        {/* School Year */}
-                                        <td className="py-3 px-4 text-slate-500">
-                                            {log.student?.schoolYear
-                                                ?.SchoolYearName ?? "—"}
-                                        </td>
-                                        {/* Year */}
-                                        <td className="py-3 px-4 text-slate-500">
-                                            {log.student?.YearLevel ?? "—"}
-                                        </td>
+                                            <td className="py-3 px-4 font-bold text-slate-800">
+                                                {p.group ?? "—"}
+                                            </td>
 
-                                        {/* Type Badge */}
-                                        <td className="py-3 px-4">
-                                            {log.LogType === "TIME IN" ? (
-                                                <span className="inline-block bg-blue-50 text-blue-600 border border-blue-200 text-[10px] font-extrabold px-2.5 py-1 rounded uppercase tracking-wider">
-                                                    TIME IN
-                                                </span>
-                                            ) : (
-                                                <span className="inline-block bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-extrabold px-2.5 py-1 rounded uppercase tracking-wider">
-                                                    TIME OUT
-                                                </span>
-                                            )}
-                                        </td>
+                                            <td className="py-3 px-4 text-slate-500">
+                                                {p.subgroup ?? "—"}
+                                            </td>
 
-                                        {/* Date & Time */}
-                                        <td className="py-3 px-4 font-medium text-slate-500 whitespace-nowrap">
-                                            {formatLogDateTime(log.ScannedAt)}
-                                        </td>
-                                    </tr>
-                                ))
+                                            <td className="py-3 px-4 text-slate-500">
+                                                {p.schoolYear ?? "—"}
+                                            </td>
+
+                                            <td className="py-3 px-4 text-slate-500">
+                                                {p.year ?? "—"}
+                                            </td>
+
+                                            <td className="py-3 px-4">
+                                                {log.LogType === "TIME IN" ? (
+                                                    <span className="inline-block bg-blue-50 text-blue-600 border border-blue-200 text-[10px] font-extrabold px-2.5 py-1 rounded uppercase tracking-wider">
+                                                        TIME IN
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-block bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-extrabold px-2.5 py-1 rounded uppercase tracking-wider">
+                                                        TIME OUT
+                                                    </span>
+                                                )}
+                                            </td>
+
+                                            <td className="py-3 px-4 font-medium text-slate-500 whitespace-nowrap">
+                                                {formatLogDateTime(log.ScannedAt)}
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             ) : (
                                 <tr>
                                     <td
-                                        colSpan="8"
+                                        colSpan="9"
                                         className="py-8 text-center text-slate-400 text-xs"
                                     >
                                         No log records found matching the

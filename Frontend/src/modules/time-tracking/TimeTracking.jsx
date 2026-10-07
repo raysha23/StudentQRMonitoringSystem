@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { QrCode, CheckCircle, Menu, X, AlertTriangle } from "lucide-react";
 import ScanRecordCard from "./ScanRecordCard";
-import { scanBarcode, getTodayLogs } from "../../api/student-log-api";
+import { scanBarcode, getTodayPersonLogs } from "../../api/person-log-api";
 import { mapLogToRecord } from "./mapLog";
 import {
     formatTime12HourWithSeconds,
@@ -81,7 +81,7 @@ export default function TimeTracking({ scannerId = 1 }) {
     // Load today's logs (both Time In and Time Out) on mount
     useEffect(() => {
         let cancelled = false;
-        Promise.all([getTodayLogs("TIME IN"), getTodayLogs("TIME OUT")])
+        Promise.all([getTodayPersonLogs("TIME IN"), getTodayPersonLogs("TIME OUT")])
             .then(([inRes, outRes]) => {
                 if (cancelled) return;
                 const merged = [...inRes.data, ...outRes.data]
@@ -218,11 +218,10 @@ export default function TimeTracking({ scannerId = 1 }) {
 
                 {/* COLUMN 2: Sliding sidebar — combined Time In + Time Out feed */}
                 <div
-                    className={`bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
-                        isRecentOpen
+                    className={`bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${isRecentOpen
                             ? "w-full lg:w-80 p-5 opacity-100"
                             : "w-0 p-0 opacity-0 border-0"
-                    }`}
+                        }`}
                 >
                     <button
                         onClick={() => setIsRecentOpen(false)}

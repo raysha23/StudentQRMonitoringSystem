@@ -11,15 +11,25 @@ class Course extends Model
     const CREATED_AT = 'CreatedAt';
     const UPDATED_AT = 'UpdatedAt';
 
-    protected $fillable = ['CourseCode', 'CourseName', 'Description', 'Status'];
+    protected $fillable = [
+        'CourseCode',
+        'CourseName',
+        'Description',
+        'Majors',
+        'Status',
+    ];
+
+    protected $casts = [
+        'Majors' => 'array',
+    ];
 
     public function sections()
     {
         return $this->hasMany(Section::class, 'CourseID', 'CourseID');
     }
 
-    public function students()
+    public function subjects()
     {
-        return $this->hasMany(Student::class, 'CourseID', 'CourseID');
+        return $this->hasMany(Subject::class, 'CourseID', 'CourseID');
     }
 }
