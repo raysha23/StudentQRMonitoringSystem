@@ -45,7 +45,8 @@ export default function EmployeeManagement() {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPosition, setSelectedPosition] = useState('All');
-
+    const [currentPage, setCurrentPage] = useState(1);
+    const employeesPerPage = 15;
     // Form page state
     const [formMode, setFormMode] = useState(null); // null | 'add' | 'edit'
     const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -78,6 +79,10 @@ export default function EmployeeManagement() {
         loadAll();
     }, [loadAll]);
 
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, selectedPosition]);
+
     // Filtered dataset
     const filteredEmployees = useMemo(() => {
         const q = searchQuery.toLowerCase();
@@ -95,6 +100,16 @@ export default function EmployeeManagement() {
             return matchesSearch && matchesPosition;
         });
     }, [employees, searchQuery, selectedPosition]);
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(filteredEmployees.length / employeesPerPage)
+    );
+
+    const paginatedEmployees = useMemo(() => {
+        const start = (currentPage - 1) * employeesPerPage;
+        return filteredEmployees.slice(start, start + employeesPerPage);
+    }, [filteredEmployees, currentPage]);
 
     // Statistics
     const totalPersonnel = employees.length;
@@ -238,15 +253,6 @@ export default function EmployeeManagement() {
                         {today} · School Administration
                     </p>
                 </div>
-                <div className="flex items-center space-x-3">
-                    <div className="inline-flex items-center space-x-1.5 bg-white border border-slate-200 px-3 py-1 rounded-full text-xs font-medium text-slate-600 shadow-xs">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span>System Online</span>
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-extrabold text-xs">
-                        A
-                    </div>
-                </div>
             </div>
 
             {/* SUMMARY CARDS ROW */}
@@ -368,8 +374,8 @@ export default function EmployeeManagement() {
                                         Loading personnel...
                                     </td>
                                 </tr>
-                            ) : filteredEmployees.length > 0 ? (
-                                filteredEmployees.map((emp) => (
+                            ) : paginatedEmployees.length > 0 ? (
+                                paginatedEmployees.map((emp) => (
                                     <tr key={emp.EmployeeID} className="hover:bg-slate-50/80 transition">
 
                                         <td className="py-4 px-6">
@@ -455,7 +461,39 @@ export default function EmployeeManagement() {
                             )}
                         </tbody>
                     </table>
+
                 </div>
+                {filteredEmployees.length > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-slate-100">
+                        <p className="text-[11px] text-slate-400 font-medium">
+                            Showing {(currentPage - 1) * employeesPerPage + 1}–
+                            {Math.min(currentPage * employeesPerPage, filteredEmployees.length)}{' '}
+                            of {filteredEmployees.length}
+                        </p>
+
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                            >
+                                Previous
+                            </button>
+
+                            <span className="px-2 text-xs font-semibold text-slate-500 whitespace-nowrap">
+                                Page {currentPage} of {totalPages}
+                            </span>
+
+                            <button
+                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* BARCODE MODAL */}

@@ -42,8 +42,8 @@ function StatusBadge({ status }) {
     return (
         <span
             className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-md border ${active
-                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                    : 'bg-slate-100 text-slate-500 border-slate-200'
+                ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                : 'bg-slate-100 text-slate-500 border-slate-200'
                 }`}
         >
             {status}
@@ -470,15 +470,6 @@ export default function AcademicStructure() {
                         Oct 7, 2026 · School Administration
                     </p>
                 </div>
-                <div className="flex items-center space-x-3">
-                    <div className="inline-flex items-center space-x-1.5 bg-white border border-slate-200 px-3 py-1 rounded-full text-xs font-medium text-slate-600 shadow-xs">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span>System Online</span>
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-extrabold text-xs">
-                        A
-                    </div>
-                </div>
             </div>
 
             {/* TOP DARK BANNER CARD WITH STATS */}
@@ -520,8 +511,8 @@ export default function AcademicStructure() {
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
                                 className={`px-5 py-2 text-xs font-bold rounded-lg transition whitespace-nowrap ${activeTab === tab
-                                        ? 'bg-white text-slate-800 shadow-xs'
-                                        : 'text-slate-500 hover:text-slate-800'
+                                    ? 'bg-white text-slate-800 shadow-xs'
+                                    : 'text-slate-500 hover:text-slate-800'
                                     }`}
                             >
                                 {tab}

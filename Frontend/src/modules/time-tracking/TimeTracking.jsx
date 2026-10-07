@@ -78,27 +78,32 @@ export default function TimeTracking({ scannerId = 1 }) {
         [],
     );
 
-    // Load today's logs (both Time In and Time Out) on mount
+    // Load today's logs (Time In and Time Out together) on mount
     useEffect(() => {
         let cancelled = false;
-        Promise.all([getTodayPersonLogs("TIME IN"), getTodayPersonLogs("TIME OUT")])
-            .then(([inRes, outRes]) => {
+
+        getTodayPersonLogs()
+            .then((res) => {
                 if (cancelled) return;
-                const merged = [...inRes.data, ...outRes.data]
-                    .map(mapLogToRecord)
-                    .sort(
+
+                const loaded = res.data.map(mapLogToRecord);
+
+                setRecentScans((prev) => {
+                    // Keep any scan made while this request was in flight
+                    const loadedIds = new Set(loaded.map((r) => r.id));
+                    return [...prev.filter((r) => !loadedIds.has(r.id)), ...loaded].sort(
                         (a, b) =>
                             new Date(b.__scannedAt || 0) -
                             new Date(a.__scannedAt || 0),
                     );
-                setRecentScans(merged);
+                });
             })
             .catch((err) => console.error("Failed to load today's logs", err));
+
         return () => {
             cancelled = true;
         };
     }, []);
-
     // Keep the scanner input focused so hardware scanners (acting as keyboard input) always land here
     useEffect(() => {
         inputRef.current?.focus();
@@ -120,7 +125,7 @@ export default function TimeTracking({ scannerId = 1 }) {
                     ScannerID: scannerId || 1,
                 });
 
-                const record = mapLogToRecord(res.data);
+                const record = mapLogToRecord(res.data.log);
                 setRecentScans((prev) => [record, ...prev]);
                 setActiveCards((prev) => [record, ...prev]);
 
@@ -219,8 +224,8 @@ export default function TimeTracking({ scannerId = 1 }) {
                 {/* COLUMN 2: Sliding sidebar — combined Time In + Time Out feed */}
                 <div
                     className={`bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${isRecentOpen
-                            ? "w-full lg:w-80 p-5 opacity-100"
-                            : "w-0 p-0 opacity-0 border-0"
+                        ? "w-full lg:w-80 p-5 opacity-100"
+                        : "w-0 p-0 opacity-0 border-0"
                         }`}
                 >
                     <button
@@ -258,8 +263,7 @@ export default function TimeTracking({ scannerId = 1 }) {
                                                 {record.student.name}
                                             </h4>
                                             <p className="text-[11px] text-slate-400 mt-0.5">
-                                                {record.student.course} ·{" "}
-                                                {record.student.section}
+                                                {record.student.subtitle}
                                             </p>
                                         </div>
                                     </div>

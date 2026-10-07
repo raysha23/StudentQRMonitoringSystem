@@ -90,66 +90,29 @@ export default function BarCodeModal({ person, type = "student", onClose }) {
     }, [barcode]);
 
     const handleDownload = () => {
-        if (!svgRef.current || !barcode) return;
+        if (!barcode?.BarcodeValue) return;
 
-        const padding = 20;
-        const headerHeight = 60; // space reserved for name + ID number text
-
-        // Read the SVG's actual rendered size so the canvas matches it exactly
-        const svgRect = svgRef.current.getBoundingClientRect();
-        const svgWidth = svgRect.width || 300;
-        const svgHeight = svgRect.height || 100;
-
-        const svgMarkup = new XMLSerializer().serializeToString(svgRef.current);
-        const svgBlob = new Blob([svgMarkup], {
-            type: "image/svg+xml;charset=utf-8",
+        const canvas = document.createElement("canvas");
+        JsBarcode(canvas, barcode.BarcodeValue, {
+            format: barcode.BarcodeFormat || "CODE128",
+            width: 2,
+            height: 40,
+            displayValue: true,
+            fontSize: 12,
+            margin: 20,
+            background: "#ffffff",
+            lineColor: "#000000",
         });
-        const svgUrl = URL.createObjectURL(svgBlob);
 
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement("canvas");
-            canvas.width = svgWidth + padding * 2;
-            canvas.height = svgHeight + headerHeight + padding * 2;
-
-            const ctx = canvas.getContext("2d");
-
-            // White background (canvases default to transparent)
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Name + ID number header text
-            ctx.textAlign = "center";
-            ctx.fillStyle = "#1e293b";
-            ctx.font = "bold 16px sans-serif";
-            ctx.fillText(name, canvas.width / 2, padding + 18);
-
-            ctx.fillStyle = "#64748b";
-            ctx.font = "12px sans-serif";
-            ctx.fillText(number, canvas.width / 2, padding + 38);
-
-            // Draw the barcode itself below the header text
-            ctx.drawImage(
-                img,
-                padding,
-                headerHeight + padding,
-                svgWidth,
-                svgHeight,
-            );
-
-            URL.revokeObjectURL(svgUrl);
-
-            canvas.toBlob((blob) => {
-                if (!blob) return;
-                const downloadUrl = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = downloadUrl;
-                link.download = `barcode-${number}.png`;
-                link.click();
-                URL.revokeObjectURL(downloadUrl);
-            }, "image/png");
-        };
-        img.src = svgUrl;
+        canvas.toBlob((blob) => {
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `barcode-${number}.png`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }, "image/png");
     };
 
     if (!person) return null;

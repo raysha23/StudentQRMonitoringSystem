@@ -8,10 +8,10 @@ use Illuminate\Http\Request;
 
 class PersonLogController extends Controller
 {
+    // Lean set: only what the scan card and Recent Scans list display
     private const WITH = [
         'student.course',
         'student.section',
-        'student.schoolYear',
         'employee.position',
         'employee.department',
     ];
@@ -27,9 +27,10 @@ class PersonLogController extends Controller
         $from = $request->query('from', today()->toDateString());
         $to   = $request->query('to', $from);
 
+        // Range on the raw column so the ScannedAt index is used
         return PersonLog::with(self::WITH)
-            ->whereDate('ScannedAt', '>=', $from)
-            ->whereDate('ScannedAt', '<=', $to)
+            ->where('ScannedAt', '>=', \Carbon\Carbon::parse($from)->startOfDay())
+            ->where('ScannedAt', '<=', \Carbon\Carbon::parse($to)->endOfDay())
             ->orderByDesc('ScannedAt')
             ->get();
     }
@@ -38,8 +39,9 @@ class PersonLogController extends Controller
     public function today()
     {
         return PersonLog::with(self::WITH)
-            ->whereDate('ScannedAt', today())
+            ->where('ScannedAt', '>=', today())
             ->orderByDesc('ScannedAt')
+            ->limit(20) // keeps the sidebar feed light on busy days
             ->get();
     }
 
@@ -59,18 +61,17 @@ class PersonLogController extends Controller
             return response()->json(['message' => 'Barcode not recognized or inactive.'], 404);
         }
 
-        // Whoever owns the barcode: a student or an employee
         $personKey = $barcode->StudentID
             ? ['StudentID' => $barcode->StudentID]
             : ['EmployeeID' => $barcode->EmployeeID];
 
+        // Uses the (StudentID|EmployeeID, ScannedAt) composite indexes
         $lastLog = PersonLog::where($personKey)
-            ->whereDate('ScannedAt', today())
+            ->where('ScannedAt', '>=', today())
             ->orderByDesc('ScannedAt')
             ->orderByDesc('LogID')
-            ->first();
+            ->first(['LogID', 'LogType']); // only the columns we need
 
-        // First scan of the day = TIME IN, then alternate
         $logType = (!$lastLog || $lastLog->LogType === 'TIME OUT') ? 'TIME IN' : 'TIME OUT';
 
         $log = PersonLog::create($personKey + [

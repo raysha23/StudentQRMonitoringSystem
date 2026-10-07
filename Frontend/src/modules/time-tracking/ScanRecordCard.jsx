@@ -29,15 +29,14 @@ export default function ScanRecordCard({ record, modeLabel, theme, animateFrom =
                 <p className="text-[11px] font-mono text-slate-400 mt-0.5 mb-3">{record.student.id}</p>
 
                 <div className="flex flex-wrap justify-center gap-1.5 mb-4">
-                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
-                        {record.student.course}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
-                        {record.student.year}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
-                        Section {record.student.section.replace('Sec ', '')}
-                    </span>
+                    {record.student.tags.map((tag) => (
+                        <span
+                            key={tag}
+                            className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold"
+                        >
+                            {tag}
+                        </span>
+                    ))}
                 </div>
 
                 <div className={`w-full rounded-xl ${theme.softBg} py-3`}>
