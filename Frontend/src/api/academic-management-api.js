@@ -5,13 +5,14 @@ import api from "./client";
 const crud = (resource) => ({
     key: [resource],
     list: async () => (await api.get(`/${resource}`)).data,
+    paged: async (params) => (await api.get(`/${resource}`, { params })).data,
     get: async (id) => (await api.get(`/${resource}/${id}`)).data,
     create: async (payload) => (await api.post(`/${resource}`, payload)).data,
     update: async (id, payload) =>
         (await api.put(`/${resource}/${id}`, payload)).data,
     remove: async (id) => (await api.delete(`/${resource}/${id}`)).data,
 });
-
+export const schoolYearsApi = crud("school-years"); // check your real route in school-year-api.js
 export const programsApi = crud("courses"); // "Programs" tab
 export const departmentsApi = crud("departments");
 export const positionsApi = crud("positions");

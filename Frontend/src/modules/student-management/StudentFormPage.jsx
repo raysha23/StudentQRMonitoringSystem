@@ -109,14 +109,9 @@ export default function StudentFormPage({
                                         alert("Image is too large. Max 2MB.");
                                         return;
                                     }
-                                    // Keep the real File object for upload...
-                                    setFormData({
-                                        ...formData,
-                                        ProfilePictureFile: file,
-                                    });
-                                    // ...and a throwaway blob URL just for the preview.
                                     setFormData((prev) => ({
                                         ...prev,
+                                        ProfilePictureFile: file,
                                         ProfilePicture:
                                             URL.createObjectURL(file),
                                     }));

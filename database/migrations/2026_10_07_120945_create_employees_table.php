@@ -10,10 +10,12 @@ return new class extends Migration
     {
         Schema::create('employees', function (Blueprint $table) {
             $table->id('EmployeeID');
-            $table->string('EmployeeNo', 20)->unique(); // e.g. EMP-001
-            $table->string('FullName', 150);
+            $table->unsignedBigInteger('DepartmentID')->nullable();
+            $table->string('EmployeeNo', 20)->unique();
+            $table->string('FirstName', 100);
+            $table->string('MiddleName', 100)->nullable();
+            $table->string('LastName', 100);
             $table->foreignId('PositionID')->constrained('positions', 'PositionID');
-            $table->foreignId('DepartmentID')->nullable()->constrained('departments', 'DepartmentID');
             $table->string('Email', 150)->unique();
             $table->string('Phone', 20)->nullable();
             $table->string('ProfilePicture', 255)->nullable();

@@ -14,10 +14,16 @@ class Course extends Model
     protected $fillable = [
         'CourseCode',
         'CourseName',
+        'DepartmentID',
         'Description',
         'Majors',
         'Status',
     ];
+
+    public function department()
+    {
+        return $this->belongsTo(Department::class, 'DepartmentID', 'DepartmentID');
+    }
 
     protected $casts = [
         'Majors' => 'array',

@@ -13,8 +13,7 @@ class PersonLogController extends Controller
     private const WITH = [
         'student.course',
         'student.section',
-        'employee.position',
-        'employee.department',
+        'employee.position.department',
     ];
 
     // The report table also shows the school year
@@ -22,8 +21,7 @@ class PersonLogController extends Controller
         'student.course',
         'student.section',
         'student.schoolYear',
-        'employee.position',
-        'employee.department',
+        'employee.position.department',
     ];
 
     // GET /person-logs?from=&to=&page=&per_page=&search=&person_type=&log_type=
@@ -107,12 +105,18 @@ class PersonLogController extends Controller
             $query->whereHas('student', fn($s) => $s->where($studentFilters));
         }
 
-        $employeeFilters = array_filter([
-            'DepartmentID' => $request->query('department_id'),
-            'PositionID'   => $request->query('position_id'),
-        ]);
-        if ($employeeFilters) {
-            $query->whereHas('employee', fn($e) => $e->where($employeeFilters));
+        if ($request->filled('position_id') || $request->filled('department_id')) {
+            $query->whereHas('employee', function ($e) use ($request) {
+                if ($request->filled('position_id')) {
+                    $e->where('PositionID', $request->query('position_id'));
+                }
+                if ($request->filled('department_id')) {
+                    $e->whereHas(
+                        'position',
+                        fn($p) => $p->where('DepartmentID', $request->query('department_id'))
+                    );
+                }
+            });
         }
 
         $search = trim((string) $request->query('search', ''));

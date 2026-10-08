@@ -13,8 +13,8 @@ use Intervention\Image\ImageManager;
 class EmployeeController extends Controller
 {
     private const WITH = [
-        'position:PositionID,PositionTitle,PositionType',
-        'department:DepartmentID,DepartmentName',
+        'position:PositionID,PositionTitle,DepartmentID',
+        'position.department:DepartmentID,DepartmentName,DepartmentType',
     ];
 
     public function index()
@@ -25,13 +25,14 @@ class EmployeeController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'FullName'       => 'required|string|max:150',
+            'FirstName'  => 'required|string|max:100',
+            'MiddleName' => 'nullable|string|max:100',
+            'LastName'   => 'required|string|max:100',
             'PositionID'     => 'required|integer|exists:positions,PositionID',
-            'DepartmentID'   => 'nullable|integer|exists:departments,DepartmentID',
             'Email'          => 'required|email|max:150|unique:employees,Email',
             'Phone'          => 'nullable|string|max:20',
             'Status'         => 'nullable|in:Active,Inactive',
-            'ProfilePicture' => 'nullable|image|max:2048', // 2MB, same as students
+            'ProfilePicture' => 'nullable|image|max:2048',
         ]);
 
         if ($request->hasFile('ProfilePicture')) {
@@ -54,9 +55,10 @@ class EmployeeController extends Controller
     public function update(Request $request, Employee $employee)
     {
         $validated = $request->validate([
-            'FullName'       => 'sometimes|required|string|max:150',
+            'FirstName'  => 'required|string|max:100',
+            'MiddleName' => 'nullable|string|max:100',
+            'LastName'   => 'required|string|max:100',
             'PositionID'     => 'sometimes|required|integer|exists:positions,PositionID',
-            'DepartmentID'   => 'nullable|integer|exists:departments,DepartmentID',
             'Email'          => [
                 'sometimes',
                 'required',

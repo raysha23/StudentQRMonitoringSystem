@@ -27,9 +27,11 @@ import {
     updateStudent,
     deleteStudent,
 } from "../../api/student-api";
-import { getCourses } from "../../api/course-api";
-import { getSections } from "../../api/section-api";
-import { getSchoolYears } from "../../api/school-year-api";
+import {
+    programsApi,
+    sectionsApi,
+    schoolYearsApi,
+} from "../../api/academic-management-api";
 
 const emptyForm = {
     StudentNumber: "",
@@ -53,10 +55,6 @@ const emptyForm = {
 export default function StudentManagementModule() {
     const queryClient = useQueryClient();
 
-    const [courses, setCourses] = useState([]);
-    const [sections, setSections] = useState([]);
-    const [schoolYears, setSchoolYears] = useState([]);
-
     // "" means "All" for every filter. Course holds the CourseID.
     const [searchInput, setSearchInput] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -75,24 +73,18 @@ export default function StudentManagementModule() {
     const [currentPage, setCurrentPage] = useState(1);
     const studentsPerPage = 15;
 
-    // Courses, sections and school years (lookups for the table and the form)
-    useEffect(() => {
-        (async () => {
-            try {
-                const [coursesRes, sectionsRes, schoolYearsRes] =
-                    await Promise.all([
-                        getCourses(),
-                        getSections(),
-                        getSchoolYears(),
-                    ]);
-                setCourses(coursesRes.data);
-                setSections(sectionsRes.data);
-                setSchoolYears(schoolYearsRes.data);
-            } catch (err) {
-                console.error("Failed to load lookups", err);
-            }
-        })();
-    }, []);
+    const { data: courses = [] } = useQuery({
+        queryKey: programsApi.key,
+        queryFn: programsApi.list,
+    });
+    const { data: sections = [] } = useQuery({
+        queryKey: sectionsApi.key,
+        queryFn: sectionsApi.list,
+    });
+    const { data: schoolYears = [] } = useQuery({
+        queryKey: schoolYearsApi.key,
+        queryFn: schoolYearsApi.list,
+    });
 
     // Wait until the user stops typing before hitting the server
     useEffect(() => {
@@ -416,19 +408,37 @@ export default function StudentManagementModule() {
                     <div
                         className={`overflow-x-auto transition-opacity ${isFetching ? "opacity-60" : ""}`}
                     >
-                        <table className="w-full text-left border-collapse whitespace-nowrap">
+                        <table className="w-full min-w-max text-left border-collapse whitespace-nowrap">
                             <thead>
                                 <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                    <th className="py-4 px-6">STUDENT</th>
-                                    <th className="py-4 px-4">STUDENT NO.</th>
-                                    <th className="py-4 px-4">COURSE</th>
-                                    <th className="py-4 px-4">SECTION</th>
-                                    <th className="py-4 px-4">YEAR</th>
-                                    <th className="py-4 px-6">CONTACT</th>
-                                    <th className="py-4 px-6">ADDRESS</th>
-                                    <th className="py-4 px-6">EMAIL</th>
-                                    <th className="py-4 px-4">STATUS</th>
-                                    <th className="py-4 px-6 text-right">
+                                    <th className="py-4 px-6 min-w-[240px]">
+                                        STUDENT
+                                    </th>
+                                    <th className="py-4 px-4 min-w-[130px]">
+                                        STUDENT NO.
+                                    </th>
+                                    <th className="py-4 px-4 min-w-[200px]">
+                                        COURSE
+                                    </th>
+                                    <th className="py-4 px-4 min-w-[120px]">
+                                        SECTION
+                                    </th>
+                                    <th className="py-4 px-4 min-w-[80px]">
+                                        YEAR
+                                    </th>
+                                    <th className="py-4 px-6 min-w-[140px]">
+                                        CONTACT
+                                    </th>
+                                    <th className="py-4 px-6 min-w-[220px]">
+                                        ADDRESS
+                                    </th>
+                                    <th className="py-4 px-6 min-w-[220px]">
+                                        EMAIL
+                                    </th>
+                                    <th className="py-4 px-4 min-w-[120px]">
+                                        STATUS
+                                    </th>
+                                    <th className="py-4 px-6 min-w-[130px] text-right">
                                         ACTIONS
                                     </th>
                                 </tr>
@@ -556,7 +566,7 @@ export default function StudentManagementModule() {
                                 ) : (
                                     <tr>
                                         <td
-                                            colSpan="8"
+                                            colSpan="10"
                                             className="py-8 text-center text-slate-400"
                                         >
                                             No student records found matching

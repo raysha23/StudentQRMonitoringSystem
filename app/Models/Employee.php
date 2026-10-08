@@ -13,16 +13,27 @@ class Employee extends Model
     protected $primaryKey = 'EmployeeID';
     protected $fillable = [
         'EmployeeNo',
-        'FullName',
+        'FirstName',
+        'MiddleName',
+        'LastName',
         'PositionID',
-        'DepartmentID',
         'Email',
         'Phone',
         'ProfilePicture',
         'Status',
     ];
 
-    protected $appends = ['ProfilePictureUrl'];
+    protected $appends = ['ProfilePictureUrl', 'FullName'];
+
+    // "Juan S. Dela Cruz": the same format the student table uses
+    public function getFullNameAttribute()
+    {
+        $middle = $this->MiddleName
+            ? mb_substr($this->MiddleName, 0, 1) . '. '
+            : '';
+
+        return trim("{$this->FirstName} {$middle}{$this->LastName}");
+    }
 
     public function getProfilePictureUrlAttribute()
     {
@@ -36,16 +47,13 @@ class Employee extends Model
 
         return asset('storage/' . $this->ProfilePicture);
     }
-    
+
     public function position()
     {
         return $this->belongsTo(Position::class, 'PositionID', 'PositionID');
     }
 
-    public function department()
-    {
-        return $this->belongsTo(Department::class, 'DepartmentID', 'DepartmentID');
-    }
+
     public function barcodes()
     {
         return $this->hasMany(PersonBarcode::class, 'EmployeeID', 'EmployeeID');

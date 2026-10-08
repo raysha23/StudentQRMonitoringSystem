@@ -1,6 +1,6 @@
 // File Path: Frontend\src\modules\employee\EmployeeManagement.jsx
-
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     Search,
     Plus,
@@ -29,7 +29,9 @@ import EmployeeFormPage from "./EmployeeFormPage";
 
 const EMPTY_FORM = {
     EmployeeNo: "",
-    FullName: "",
+    FirstName: "",
+    MiddleName: "",
+    LastName: "",
     PositionID: "",
     DepartmentID: "",
     Email: "",
@@ -45,12 +47,6 @@ const avatarFor = (emp) =>
     `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(emp.FullName)}`;
 
 export default function EmployeeManagement() {
-    const [employees, setEmployees] = useState([]);
-    const [positions, setPositions] = useState([]);
-    const [departments, setDepartments] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedPosition, setSelectedPosition] = useState("All");
     const [currentPage, setCurrentPage] = useState(1);
@@ -65,27 +61,31 @@ export default function EmployeeManagement() {
     const [barcodeEmployee, setBarcodeEmployee] = useState(null);
     const [employeeToDelete, setEmployeeToDelete] = useState(null);
     const [viewingPhotoEmployee, setViewingPhotoEmployee] = useState(null);
-    const loadAll = useCallback(async () => {
-        setError(null);
-        try {
-            const [emps, pos, deps] = await Promise.all([
-                getEmployees(),
-                positionsApi.list(),
-                departmentsApi.list(),
-            ]);
-            setEmployees(emps);
-            setPositions(pos);
-            setDepartments(deps);
-        } catch (err) {
-            setError(getErrorMessage(err, "Failed to load personnel."));
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    const queryClient = useQueryClient();
 
-    useEffect(() => {
-        loadAll();
-    }, [loadAll]);
+    const {
+        data: employees = [],
+        isLoading: loading,
+        error: queryError,
+    } = useQuery({
+        queryKey: ["employees"],
+        queryFn: getEmployees,
+    });
+    const { data: positions = [] } = useQuery({
+        queryKey: positionsApi.key,
+        queryFn: positionsApi.list,
+    });
+    const { data: departments = [] } = useQuery({
+        queryKey: departmentsApi.key,
+        queryFn: departmentsApi.list,
+    });
+
+    const error = queryError
+        ? getErrorMessage(queryError, "Failed to load personnel.")
+        : null;
+
+    const refreshEmployees = () =>
+        queryClient.invalidateQueries({ queryKey: ["employees"] });
 
     useEffect(() => {
         setCurrentPage(1);
@@ -99,7 +99,7 @@ export default function EmployeeManagement() {
                 emp.FullName.toLowerCase().includes(q) ||
                 emp.EmployeeNo.toLowerCase().includes(q) ||
                 emp.Email.toLowerCase().includes(q) ||
-                (emp.department?.DepartmentName ?? "")
+                (emp.position?.department?.DepartmentName ?? "")
                     .toLowerCase()
                     .includes(q);
 
@@ -128,7 +128,7 @@ export default function EmployeeManagement() {
     ).length;
     const inactivePersonnel = totalPersonnel - activePersonnel;
     const facultyMembers = employees.filter(
-        (e) => e.position?.PositionType === "Teaching",
+        (e) => e.position?.department?.DepartmentType === "Teaching",
     ).length;
 
     // Positions offered in the form: active ones, plus the employee's current one when editing
@@ -138,26 +138,29 @@ export default function EmployeeManagement() {
             (formMode === "edit" &&
                 p.PositionID === selectedEmployee?.PositionID),
     );
-
+    // Active departments, plus the employee's current one when editing
+    const departmentOptions = departments.filter(
+        (d) =>
+            d.Status === "Active" ||
+            (formMode === "edit" &&
+                d.DepartmentID === selectedEmployee?.position?.DepartmentID),
+    );
     /* ---------------- Form handlers ---------------- */
 
     const openAdd = () => {
-        setFormData({
-            ...EMPTY_FORM,
-            PositionID:
-                positions.find((p) => p.Status === "Active")?.PositionID ?? "",
-        });
+        setFormData({ ...EMPTY_FORM });
         setFormError(null);
         setSelectedEmployee(null);
         setFormMode("add");
     };
-
     const openEdit = (emp) => {
         setFormData({
             EmployeeNo: emp.EmployeeNo,
-            FullName: emp.FullName,
+            FirstName: emp.FirstName,
+            MiddleName: emp.MiddleName ?? "",
+            LastName: emp.LastName,
             PositionID: emp.PositionID,
-            DepartmentID: emp.DepartmentID ?? "",
+            DepartmentID: emp.position?.DepartmentID ?? "",
             Email: emp.Email,
             Phone: emp.Phone ?? "",
             Status: emp.Status,
@@ -182,9 +185,10 @@ export default function EmployeeManagement() {
 
     const buildFormData = () => {
         const fd = new FormData();
-        fd.append("FullName", formData.FullName.trim());
+        fd.append("FirstName", formData.FirstName.trim());
+        fd.append("MiddleName", formData.MiddleName.trim()); // empty becomes null on the server
+        fd.append("LastName", formData.LastName.trim());
         fd.append("PositionID", formData.PositionID);
-        fd.append("DepartmentID", formData.DepartmentID); // empty string becomes null on the server
         fd.append("Email", formData.Email.trim());
         fd.append("Phone", formData.Phone);
         if (formMode === "edit") fd.append("Status", formData.Status);
@@ -211,7 +215,7 @@ export default function EmployeeManagement() {
                 await createEmployee(buildFormData());
             }
             closeForm();
-            await loadAll();
+            await refreshEmployees();
         } catch (err) {
             setFormError(getErrorMessage(err, "Failed to save employee."));
         } finally {
@@ -222,7 +226,7 @@ export default function EmployeeManagement() {
     const confirmDeleteEmployee = async () => {
         await deleteEmployee(employeeToDelete.EmployeeID); // throws on failure, the modal shows it
         setEmployeeToDelete(null);
-        await loadAll();
+        await refreshEmployees();
     };
 
     const today = new Date().toLocaleDateString("en-US", {
@@ -245,7 +249,7 @@ export default function EmployeeManagement() {
                 formData={formData}
                 setFormData={setFormData}
                 positions={positionOptions}
-                departments={departments}
+                departments={departmentOptions}
                 saving={saving}
                 serverError={formError}
                 onSubmit={handleSubmit}
@@ -372,6 +376,9 @@ export default function EmployeeManagement() {
                                     value={String(p.PositionID)}
                                 >
                                     {p.PositionTitle}
+                                    {p.department
+                                        ? ` · ${p.department.DepartmentName}`
+                                        : ""}
                                 </option>
                             ))}
                         </select>
@@ -388,15 +395,25 @@ export default function EmployeeManagement() {
 
                 {/* TABLE */}
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full min-w-max text-left border-collapse whitespace-nowrap">
                         <thead>
                             <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                                <th className="py-3.5 px-6">EMPLOYEE</th>
-                                <th className="py-3.5 px-6">POSITION</th>
-                                <th className="py-3.5 px-6">DEPARTMENT</th>
-                                <th className="py-3.5 px-6">CONTACT</th>
-                                <th className="py-3.5 px-6">STATUS</th>
-                                <th className="py-3.5 px-6 text-right">
+                                <th className="py-3.5 px-6 min-w-[260px]">
+                                    EMPLOYEE
+                                </th>
+                                <th className="py-3.5 px-6 min-w-[160px]">
+                                    POSITION
+                                </th>
+                                <th className="py-3.5 px-6 min-w-[180px]">
+                                    DEPARTMENT
+                                </th>
+                                <th className="py-3.5 px-6 min-w-[240px]">
+                                    CONTACT
+                                </th>
+                                <th className="py-3.5 px-6 min-w-[110px]">
+                                    STATUS
+                                </th>
+                                <th className="py-3.5 px-6 min-w-[130px] text-right">
                                     ACTIONS
                                 </th>
                             </tr>
@@ -454,8 +471,8 @@ export default function EmployeeManagement() {
                                         </td>
 
                                         <td className="py-4 px-6 font-medium text-slate-600">
-                                            {emp.department?.DepartmentName ??
-                                                "—"}
+                                            {emp.position?.department
+                                                ?.DepartmentName ?? "—"}
                                         </td>
 
                                         <td className="py-4 px-6">

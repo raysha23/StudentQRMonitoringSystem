@@ -6,15 +6,15 @@ import { Search, Download, Filter } from "lucide-react";
 import { getPersonLogs, exportPersonLogs } from "../../api/person-log-api";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 
-import { getCourses } from "../../api/course-api";
-import { getSchoolYears } from "../../api/school-year-api";
-import { getSections } from "../../api/section-api";
 import { formatLogDateTime } from "../../utils/global-helper";
 import { exportLogsToExcel } from "../../utils/csv-export";
 
 import {
     departmentsApi,
     positionsApi,
+    sectionsApi,
+    programsApi,
+    schoolYearsApi,
 } from "../../api/academic-management-api";
 
 // Flattens a log's student/employee into one shape the table can use
@@ -28,7 +28,8 @@ const getPerson = (log) => {
             picture: s.ProfilePictureUrl,
             group: s.course?.CourseName,
             subgroup: s.section?.SectionName,
-            schoolYear: s.schoolYear?.SchoolYearName,
+            schoolYear:
+                s.school_year?.SchoolYearName ?? s.schoolYear?.SchoolYearName,
             year: s.YearLevel,
             department: null,
             position: null,
@@ -41,11 +42,11 @@ const getPerson = (log) => {
             number: e.EmployeeNo,
             name: e.FullName ?? "",
             picture: e.ProfilePictureUrl,
-            group: e.department?.DepartmentName,
+            group: e.position?.department?.DepartmentName,
             subgroup: e.position?.PositionTitle,
             schoolYear: null,
             year: null,
-            department: e.department?.DepartmentName,
+            department: e.position?.department?.DepartmentName,
             position: e.position?.PositionTitle,
         };
     }
@@ -62,15 +63,11 @@ const getPerson = (log) => {
         position: null,
     };
 };
-
+const ORDINALS = { 1: "1st", 2: "2nd", 3: "3rd", 4: "4th" };
 const selectCls =
     "w-full lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
 
 export default function ReportManagement() {
-    const [courses, setCourses] = useState([]);
-    const [schoolYears, setSchoolYears] = useState([]);
-    const [sections, setSections] = useState([]);
-
     const todayString = new Date().toISOString().split("T")[0];
     const [fromDate, setFromDate] = useState(todayString);
     const [toDate, setToDate] = useState(todayString);
@@ -93,14 +90,45 @@ export default function ReportManagement() {
         queryKey: departmentsApi.key,
         queryFn: departmentsApi.list,
     });
+    const { data: sections = [] } = useQuery({
+        queryKey: sectionsApi.key,
+        queryFn: sectionsApi.list,
+    });
     const { data: positions = [] } = useQuery({
         queryKey: positionsApi.key,
         queryFn: positionsApi.list,
     });
+    const { data: courses = [] } = useQuery({
+        queryKey: programsApi.key,
+        queryFn: programsApi.list,
+    });
+    const { data: schoolYears = [] } = useQuery({
+        queryKey: schoolYearsApi.key,
+        queryFn: schoolYearsApi.list,
+    });
 
-    useEffect(() => {
-        loadFilters();
-    }, []);
+    const visibleSections = sections
+        .filter((s) => !selectedCourse || s.CourseID === Number(selectedCourse))
+        .sort(
+            (a, b) =>
+                (a.course?.CourseCode ?? "").localeCompare(
+                    b.course?.CourseCode ?? "",
+                ) ||
+                a.YearLevel - b.YearLevel ||
+                a.SectionName.localeCompare(b.SectionName),
+        );
+    const visiblePositions = positions
+        .filter(
+            (p) =>
+                !selectedDepartment ||
+                p.DepartmentID === Number(selectedDepartment),
+        )
+        .sort(
+            (a, b) =>
+                (a.department?.DepartmentName ?? "").localeCompare(
+                    b.department?.DepartmentName ?? "",
+                ) || a.PositionTitle.localeCompare(b.PositionTitle),
+        );
 
     // Wait until the user stops typing before hitting the server
     useEffect(() => {
@@ -110,19 +138,6 @@ export default function ReportManagement() {
         }, 400);
         return () => clearTimeout(t);
     }, [searchInput]);
-
-    const loadFilters = async () => {
-        try {
-            const [coursesRes, schoolYearsRes, sectionsRes] = await Promise.all(
-                [getCourses(), getSchoolYears(), getSections()],
-            );
-            setCourses(coursesRes.data);
-            setSchoolYears(schoolYearsRes.data);
-            setSections(sectionsRes.data);
-        } catch (err) {
-            console.error("Failed to load filter options", err);
-        }
-    };
 
     // Filters sent to the backend (undefined values are not sent)
     const filterParams = {
@@ -327,7 +342,11 @@ export default function ReportManagement() {
                         {/* Department Dropdown (employees only) */}
                         <select
                             value={selectedDepartment}
-                            onChange={pick(setSelectedDepartment)}
+                            onChange={(e) => {
+                                setSelectedDepartment(e.target.value);
+                                setSelectedPosition("");
+                                setCurrentPage(1);
+                            }}
                             disabled={employeeFiltersDisabled}
                             className={`${selectCls} lg:w-32`}
                         >
@@ -350,9 +369,11 @@ export default function ReportManagement() {
                             className={`${selectCls} lg:w-28`}
                         >
                             <option value="">All Positions</option>
-                            {positions.map((p) => (
+                            {visiblePositions.map((p) => (
                                 <option key={p.PositionID} value={p.PositionID}>
-                                    {p.PositionTitle}
+                                    {selectedDepartment
+                                        ? p.PositionTitle
+                                        : `${p.department?.DepartmentName ?? "—"} · ${p.PositionTitle}`}
                                 </option>
                             ))}
                         </select>
@@ -360,7 +381,11 @@ export default function ReportManagement() {
                         {/* Course Dropdown (students only) */}
                         <select
                             value={selectedCourse}
-                            onChange={pick(setSelectedCourse)}
+                            onChange={(e) => {
+                                setSelectedCourse(e.target.value);
+                                setSelectedSection("");
+                                setCurrentPage(1);
+                            }}
                             disabled={studentFiltersDisabled}
                             className={`${selectCls} lg:w-28`}
                         >
@@ -398,8 +423,10 @@ export default function ReportManagement() {
                             className={`${selectCls} lg:w-28`}
                         >
                             <option value="">All Sections</option>
-                            {sections.map((s) => (
+                            {visibleSections.map((s) => (
                                 <option key={s.SectionID} value={s.SectionID}>
+                                    {s.course?.CourseCode} ·{" "}
+                                    {ORDINALS[s.YearLevel] ?? s.YearLevel} Yr ·{" "}
                                     {s.SectionName}
                                 </option>
                             ))}
@@ -428,20 +455,34 @@ export default function ReportManagement() {
                 <div
                     className={`overflow-x-auto transition-opacity ${isFetching ? "opacity-60" : ""}`}
                 >
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full min-w-max text-left border-collapse whitespace-nowrap">
                         <thead>
                             <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                                <th className="py-3 px-4">ID NUMBER</th>
-                                <th className="py-3 px-4">NAME</th>
-                                <th className="py-3 px-4">PERSON</th>
-                                <th className="py-3 px-4">COURSE / DEPT</th>
-                                <th className="py-3 px-4">
+                                <th className="py-3 px-4 min-w-[120px]">
+                                    ID NUMBER
+                                </th>
+                                <th className="py-3 px-4 min-w-[220px]">
+                                    NAME
+                                </th>
+                                <th className="py-3 px-4 min-w-[100px]">
+                                    PERSON
+                                </th>
+                                <th className="py-3 px-4 min-w-[160px]">
+                                    COURSE / DEPT
+                                </th>
+                                <th className="py-3 px-4 min-w-[160px]">
                                     SECTION / POSITION
                                 </th>
-                                <th className="py-3 px-4">SCHOOL YEAR</th>
-                                <th className="py-3 px-4">YEAR</th>
-                                <th className="py-3 px-4">TYPE</th>
-                                <th className="py-3 px-4">DATE & TIME</th>
+                                <th className="py-3 px-4 min-w-[130px]">
+                                    SCHOOL YEAR
+                                </th>
+                                <th className="py-3 px-4 min-w-[80px]">YEAR</th>
+                                <th className="py-3 px-4 min-w-[110px]">
+                                    TYPE
+                                </th>
+                                <th className="py-3 px-4 min-w-[180px]">
+                                    DATE & TIME
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs text-slate-700">

@@ -24,18 +24,39 @@ export default function EmployeeFormPage({
     submitLabel,
 }) {
     const [errors, setErrors] = useState({});
+    const handleNameChange = (field) => (e) => {
+        if (!NAME_REGEX.test(e.target.value)) return;
+        setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+    };
 
+    const fullName = [
+        formData.FirstName,
+        formData.MiddleName,
+        formData.LastName,
+    ]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(" ");
     const validate = () => {
         const newErrors = {};
 
-        if (!formData.FullName.trim()) {
-            newErrors.FullName = "Full name is required.";
-        } else if (!NAME_REGEX.test(formData.FullName)) {
-            newErrors.FullName = "Full name cannot contain numbers.";
+        if (!formData.FirstName.trim()) {
+            newErrors.FirstName = "First name is required.";
+        } else if (!NAME_REGEX.test(formData.FirstName)) {
+            newErrors.FirstName = "First name cannot contain numbers.";
+        }
+        if (formData.MiddleName && !NAME_REGEX.test(formData.MiddleName)) {
+            newErrors.MiddleName = "Middle name cannot contain numbers.";
+        }
+        if (!formData.LastName.trim()) {
+            newErrors.LastName = "Last name is required.";
+        } else if (!NAME_REGEX.test(formData.LastName)) {
+            newErrors.LastName = "Last name cannot contain numbers.";
         }
 
         if (formData.Phone && !PHONE_REGEX.test(formData.Phone)) {
-            newErrors.Phone = "Phone number must be 11 digits and start with 09.";
+            newErrors.Phone =
+                "Phone number must be 11 digits and start with 09.";
         }
 
         setErrors(newErrors);
@@ -82,9 +103,13 @@ export default function EmployeeFormPage({
     };
 
     const avatarUrl = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(
-        formData.FullName.trim() || "employee",
+        fullName || "employee",
     )}`;
 
+    // Only positions that belong to the chosen department
+    const availablePositions = positions.filter(
+        (p) => String(p.DepartmentID) === String(formData.DepartmentID),
+    );
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto">
             {/* Header */}
@@ -138,7 +163,7 @@ export default function EmployeeFormPage({
                         </div>
 
                         <h4 className="mt-4 text-base font-bold text-slate-800 text-center leading-tight">
-                            {formData.FullName.trim() || "New Employee"}
+                            {fullName || "New Employee"}
                         </h4>
                         <p className="text-xs font-mono text-slate-400 mt-1">
                             {formData.EmployeeNo || "ID assigned on save"}
@@ -173,36 +198,103 @@ export default function EmployeeFormPage({
                                 Structure → Positions first.
                             </div>
                         )}
-
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">
-                                Full Name
-                            </label>
-                            <input
-                                type="text"
-                                required
-                                placeholder="Maria Clara Santos"
-                                value={formData.FullName}
-                                onChange={(e) => {
-                                    if (!NAME_REGEX.test(e.target.value)) return;
-                                    setFormData({
-                                        ...formData,
-                                        FullName: e.target.value,
-                                    });
-                                }}
-                                className={`${fieldCls} ${errors.FullName
-                                        ? "border-rose-400 focus:ring-rose-200"
-                                        : ""
-                                    }`}
-                            />
-                            {errors.FullName && (
-                                <p className="mt-1 text-[11px] text-rose-500 font-medium">
-                                    {errors.FullName}
-                                </p>
-                            )}
+                        {departments.length === 0 && (
+                            <div className="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-lg px-3 py-2.5">
+                                No departments exist yet. Add some in Academic
+                                Structure → Departments first.
+                            </div>
+                        )}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                    First Name
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="Juan"
+                                    value={formData.FirstName}
+                                    onChange={handleNameChange("FirstName")}
+                                    className={`${fieldCls} ${errors.FirstName ? "border-rose-400 focus:ring-rose-200" : ""}`}
+                                />
+                                {errors.FirstName && (
+                                    <p className="mt-1 text-[11px] text-rose-500 font-medium">
+                                        {errors.FirstName}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <label className="flex items-baseline gap-x-1 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
+                                    <span>Middle Name</span>
+                                    <span className="font-normal text-slate-400 text-[11px]">
+                                        (Optional)
+                                    </span>
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="Santos"
+                                    value={formData.MiddleName}
+                                    onChange={handleNameChange("MiddleName")}
+                                    className={`${fieldCls} ${errors.MiddleName ? "border-rose-400 focus:ring-rose-200" : ""}`}
+                                />
+                                {errors.MiddleName && (
+                                    <p className="mt-1 text-[11px] text-rose-500 font-medium">
+                                        {errors.MiddleName}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                    Last Name
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="Dela Cruz"
+                                    value={formData.LastName}
+                                    onChange={handleNameChange("LastName")}
+                                    className={`${fieldCls} ${errors.LastName ? "border-rose-400 focus:ring-rose-200" : ""}`}
+                                />
+                                {errors.LastName && (
+                                    <p className="mt-1 text-[11px] text-rose-500 font-medium">
+                                        {errors.LastName}
+                                    </p>
+                                )}
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                    Department
+                                </label>
+                                <select
+                                    required
+                                    value={formData.DepartmentID}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            DepartmentID: e.target.value,
+                                            PositionID: "", // the old position may not belong to this department
+                                        })
+                                    }
+                                    className={fieldCls}
+                                >
+                                    <option value="" disabled>
+                                        Select a department
+                                    </option>
+                                    {departments.map((d) => (
+                                        <option
+                                            key={d.DepartmentID}
+                                            value={d.DepartmentID}
+                                        >
+                                            {d.DepartmentName} (
+                                            {d.DepartmentType})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">
                                     Position
@@ -216,45 +308,22 @@ export default function EmployeeFormPage({
                                             PositionID: e.target.value,
                                         })
                                     }
-                                    className={fieldCls}
+                                    disabled={!formData.DepartmentID}
+                                    className={`${fieldCls} disabled:opacity-50 disabled:cursor-not-allowed`}
                                 >
                                     <option value="" disabled>
-                                        Select a position
+                                        {!formData.DepartmentID
+                                            ? "Select a department first"
+                                            : availablePositions.length > 0
+                                              ? "Select a position"
+                                              : "No positions in this department"}
                                     </option>
-                                    {positions.map((p) => (
+                                    {availablePositions.map((p) => (
                                         <option
                                             key={p.PositionID}
                                             value={p.PositionID}
                                         >
                                             {p.PositionTitle}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="flex items-baseline gap-x-1 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
-                                    <span>Department</span>
-                                    <span className="font-normal text-slate-400 text-[11px]">
-                                        (Optional)
-                                    </span>
-                                </label>
-                                <select
-                                    value={formData.DepartmentID}
-                                    onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            DepartmentID: e.target.value,
-                                        })
-                                    }
-                                    className={fieldCls}
-                                >
-                                    <option value="">No department</option>
-                                    {departments.map((d) => (
-                                        <option
-                                            key={d.DepartmentID}
-                                            value={d.DepartmentID}
-                                        >
-                                            {d.DepartmentName}
                                         </option>
                                     ))}
                                 </select>
@@ -304,10 +373,11 @@ export default function EmployeeFormPage({
                                         Phone: digitsOnly,
                                     });
                                 }}
-                                className={`${fieldCls} ${errors.Phone
+                                className={`${fieldCls} ${
+                                    errors.Phone
                                         ? "border-rose-400 focus:ring-rose-200"
                                         : ""
-                                    }`}
+                                }`}
                             />
                             {errors.Phone && (
                                 <p className="mt-1 text-[11px] text-rose-500 font-medium">

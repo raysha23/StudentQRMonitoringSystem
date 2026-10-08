@@ -8,9 +8,24 @@ use Illuminate\Validation\Rule;
 
 class DepartmentController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return Department::orderByDesc('DepartmentName')->get();
+        $query = Department::orderByDesc('DepartmentID');
+
+        if (! $request->has('page')) {
+            return $query->get();
+        }
+        if ($st = $request->query('status')) {
+            $query->where('Status', $st);
+        }
+        if ($s = trim((string) $request->query('search', ''))) {
+            $query->where(fn($q) => $q
+                ->where('DepartmentCode', 'like', "%{$s}%")
+                ->orWhere('DepartmentName', 'like', "%{$s}%")
+                ->orWhere('DepartmentType', 'like', "%{$s}%"));
+        }
+
+        return $query->paginate(min((int) $request->query('per_page', 10), 100));
     }
 
     public function store(Request $request)
@@ -18,7 +33,7 @@ class DepartmentController extends Controller
         $data = $request->validate([
             'DepartmentCode' => 'required|string|max:20|unique:departments,DepartmentCode',
             'DepartmentName' => 'required|string|max:150',
-            'DepartmentHead' => 'nullable|string|max:150',
+            'DepartmentType' => 'required|in:Teaching,Non-Teaching',
         ]);
 
         return response()->json(Department::create($data), 201);
@@ -38,10 +53,10 @@ class DepartmentController extends Controller
                 'string',
                 'max:20',
                 Rule::unique('departments', 'DepartmentCode')
-                    ->ignore($department->DepartmentID, 'DepartmentID')
+                    ->ignore($department->DepartmentID, 'DepartmentID'),
             ],
             'DepartmentName' => 'sometimes|required|string|max:150',
-            'DepartmentHead' => 'nullable|string|max:150',
+            'DepartmentType' => 'sometimes|required|in:Teaching,Non-Teaching',
             'Status'         => 'sometimes|in:Active,Inactive',
         ]);
 
@@ -52,9 +67,9 @@ class DepartmentController extends Controller
 
     public function destroy(Department $department)
     {
-        if ($department->employees()->exists()) {
+        if ($department->positions()->exists() || $department->courses()->exists()) {
             return response()->json(
-                ['message' => 'Cannot delete a department that still has employees.'],
+                ['message' => 'Cannot delete a department that still has positions or programs.'],
                 409
             );
         }

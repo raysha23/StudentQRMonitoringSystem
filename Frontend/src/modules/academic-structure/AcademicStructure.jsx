@@ -1,7 +1,12 @@
 // File Path: Frontend\src\modules\academic-structure\academicStructure.jsx
 
-import React, { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import React, { useState, useEffect } from "react";
+import {
+    useQuery,
+    useQueryClient,
+    keepPreviousData,
+} from "@tanstack/react-query";
+
 import { Search, Plus, Edit2, Trash2, X } from "lucide-react";
 import {
     programsApi,
@@ -12,7 +17,7 @@ import {
     getErrorMessage,
 } from "../../api/academic-management-api";
 
-const TABS = ["Programs", "Departments", "Positions", "Courses", "Sections"];
+const TABS = ["Departments", "Programs", "Positions", "Courses", "Sections"];
 
 const YEAR_LEVELS = [
     { value: 1, label: "1st Year" },
@@ -21,12 +26,7 @@ const YEAR_LEVELS = [
     { value: 4, label: "4th Year" },
 ];
 const yearLabel = (n) => YEAR_LEVELS.find((y) => y.value === n)?.label ?? "—";
-
 const displayId = (prefix, id) => `${prefix}-${String(id).padStart(3, "0")}`;
-
-// Newest first (higher auto-increment ID = newer record)
-const newestFirst = (items, idKey) =>
-    [...items].sort((a, b) => b[idKey] - a[idKey]);
 
 const inputCls =
     "w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -89,8 +89,9 @@ const buildPayload = (fields, form, includeStatus) => {
     const payload = {};
     fields.forEach((f) => {
         const v = form[f.key];
-        if (f.numeric) {
-            // Blank numbers are left out so the database default applies
+        if (f.nullable) {
+            payload[f.key] = v === "" || v == null ? null : Number(v);
+        } else if (f.numeric) {
             if (v !== "" && v != null) payload[f.key] = Number(v);
         } else {
             payload[f.key] = typeof v === "string" ? v.trim() : v;
@@ -105,6 +106,65 @@ const emptyForm = (fields) =>
     Object.fromEntries(
         fields.map((f) => [f.key, f.options?.length ? f.options[0].value : ""]),
     );
+const PAGE_SIZE = 10;
+const PROGRAMS_PER_PAGE = 9;
+
+function useDebounce(value, delay = 300) {
+    const [debounced, setDebounced] = useState(value);
+    useEffect(() => {
+        const t = setTimeout(() => setDebounced(value), delay);
+        return () => clearTimeout(t);
+    }, [value, delay]);
+    return debounced;
+}
+
+function StatusFilter({ value, onChange }) {
+    return (
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+        </select>
+    );
+}
+
+function Pagination({ page, lastPage, total, perPage, onChange }) {
+    if (total <= perPage) return null;
+    const start = (page - 1) * perPage + 1;
+    const end = Math.min(page * perPage, total);
+    const btn =
+        "px-3 py-1.5 rounded-lg border border-slate-200 font-semibold hover:bg-slate-50 transition disabled:opacity-40 disabled:cursor-not-allowed";
+    return (
+        <div className="flex items-center justify-between pt-2 text-xs text-slate-500">
+            <span>
+                Showing {start}–{end} of {total}
+            </span>
+            <div className="flex items-center space-x-2">
+                <button
+                    className={btn}
+                    disabled={page <= 1}
+                    onClick={() => onChange(page - 1)}
+                >
+                    Prev
+                </button>
+                <span className="font-semibold">
+                    Page {page} of {lastPage}
+                </span>
+                <button
+                    className={btn}
+                    disabled={page >= lastPage}
+                    onClick={() => onChange(page + 1)}
+                >
+                    Next
+                </button>
+            </div>
+        </div>
+    );
+}
 
 /* Shared add / edit modal */
 function EntityModal({
@@ -241,6 +301,9 @@ function EntityManager({
 }) {
     const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
+    const [page, setPage] = useState(1);
+    const debouncedSearch = useDebounce(search);
+    const [statusFilter, setStatusFilter] = useState("");
     const [actionError, setActionError] = useState(null); // delete errors
 
     const [modal, setModal] = useState(null); // null | { mode: 'add' } | { mode: 'edit', item }
@@ -249,10 +312,44 @@ function EntityManager({
     const [saving, setSaving] = useState(false);
 
     const {
-        data: items = [],
+        data,
         isLoading: loading,
         error: loadError,
-    } = useQuery({ queryKey: api.key, queryFn: api.list });
+    } = useQuery({
+        queryKey: [...api.key, "paged", page, debouncedSearch, statusFilter],
+        queryFn: () =>
+            api.paged({
+                page,
+                per_page: PAGE_SIZE,
+                search: debouncedSearch,
+                status: statusFilter,
+            }),
+        placeholderData: keepPreviousData,
+    });
+
+    // Array fallback = endpoint not paginated yet
+    const isArr = Array.isArray(data);
+    const matched = isArr
+        ? data.filter(
+              (r) =>
+                  (!statusFilter || r.Status === statusFilter) &&
+                  JSON.stringify(r)
+                      .toLowerCase()
+                      .includes(debouncedSearch.toLowerCase()),
+          )
+        : [];
+    const items = isArr
+        ? matched.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        : (data?.data ?? []);
+    const total = isArr ? matched.length : (data?.total ?? 0);
+    const lastPage = isArr
+        ? Math.max(1, Math.ceil(matched.length / PAGE_SIZE))
+        : (data?.last_page ?? 1);
+
+    // Step back if the last row of the last page was deleted
+    useEffect(() => {
+        if (page > lastPage) setPage(lastPage);
+    }, [page, lastPage]);
 
     const error =
         actionError ||
@@ -265,11 +362,6 @@ function EntityManager({
 
     const reload = () => queryClient.invalidateQueries({ queryKey: api.key });
 
-    const q = search.toLowerCase();
-
-    const filtered = newestFirst(items, idKey).filter((item) =>
-        JSON.stringify(item).toLowerCase().includes(q),
-    );
     const openAdd = () => {
         setForm(emptyForm(fields));
         setFormError(null);
@@ -330,13 +422,23 @@ function EntityManager({
                     <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
                 </div>
                 <div className="flex items-center space-x-3">
+                    <StatusFilter
+                        value={statusFilter}
+                        onChange={(v) => {
+                            setStatusFilter(v);
+                            setPage(1);
+                        }}
+                    />
                     <div className="relative sm:w-64">
                         <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
                             type="text"
                             placeholder={`Search ${singular.toLowerCase()}s...`}
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            onChange={(e) => {
+                                setSearch(e.target.value);
+                                setPage(1);
+                            }}
                             className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400"
                         />
                     </div>
@@ -376,8 +478,8 @@ function EntityManager({
                                     Loading...
                                 </td>
                             </tr>
-                        ) : filtered.length > 0 ? (
-                            filtered.map((item) => (
+                        ) : items.length > 0 ? (
+                            items.map((item) => (
                                 <tr
                                     key={item[idKey]}
                                     className="hover:bg-slate-50/80 transition"
@@ -433,6 +535,13 @@ function EntityManager({
                     </tbody>
                 </table>
             </div>
+            <Pagination
+                page={page}
+                lastPage={lastPage}
+                total={total}
+                perPage={PAGE_SIZE}
+                onChange={setPage}
+            />
 
             {modal && (
                 <EntityModal
@@ -456,28 +565,65 @@ function EntityManager({
 /* ------------------------------------------------------------------ */
 
 export default function AcademicStructure() {
-    const [activeTab, setActiveTab] = useState("Programs");
+    const [activeTab, setActiveTab] = useState("Departments");
     const [searchQuery, setSearchQuery] = useState("");
+    const [page, setPage] = useState(1);
+    const debouncedSearch = useDebounce(searchQuery);
+    const [statusFilter, setStatusFilter] = useState("");
 
     const [modal, setModal] = useState(null); // null | { mode: 'add' } | { mode: 'edit', item }
     const [form, setForm] = useState({});
     const [formError, setFormError] = useState(null);
     const [saving, setSaving] = useState(false);
 
-    const q = searchQuery.toLowerCase();
     const queryClient = useQueryClient();
     const [actionError, setActionError] = useState(null);
 
+    const { data: programs = [] } = useQuery({
+        queryKey: programsApi.key,
+        queryFn: programsApi.list,
+    });
+
     const {
-        data: programs = [],
-        isLoading: programsLoading,
-        error: programsError,
-    } = useQuery({ queryKey: programsApi.key, queryFn: programsApi.list });
+        data: pagedData,
+        isLoading: pagedLoading,
+        error: pagedError,
+    } = useQuery({
+        queryKey: [
+            ...programsApi.key,
+            "paged",
+            page,
+            debouncedSearch,
+            statusFilter,
+        ],
+        queryFn: () =>
+            programsApi.paged({
+                page,
+                per_page: PROGRAMS_PER_PAGE,
+                search: debouncedSearch,
+                status: statusFilter,
+            }),
+        placeholderData: keepPreviousData,
+    });
+
+    const programRows = Array.isArray(pagedData)
+        ? pagedData
+        : (pagedData?.data ?? []);
+    const programTotal = Array.isArray(pagedData)
+        ? pagedData.length
+        : (pagedData?.total ?? 0);
+    const programLastPage = Array.isArray(pagedData)
+        ? 1
+        : (pagedData?.last_page ?? 1);
+
+    useEffect(() => {
+        if (page > programLastPage) setPage(programLastPage);
+    }, [page, programLastPage]);
 
     const error =
         actionError ||
-        (programsError
-            ? getErrorMessage(programsError, "Failed to load programs.")
+        (pagedError
+            ? getErrorMessage(pagedError, "Failed to load programs.")
             : null);
 
     // Only the programs list (used when sections or courses change the counts)
@@ -492,27 +638,59 @@ export default function AcademicStructure() {
             queryClient.invalidateQueries({ queryKey: sectionsApi.key }),
         ]);
 
-    const filteredPrograms = newestFirst(programs, "CourseID").filter(
-        (p) =>
-            p.CourseName.toLowerCase().includes(q) ||
-            p.CourseCode.toLowerCase().includes(q) ||
-            (p.Description ?? "").toLowerCase().includes(q),
-    );
-
     const activeCount = programs.filter((p) => p.Status === "Active").length;
     const totalSections = programs.reduce(
         (acc, p) => acc + (p.sections_count ?? 0),
         0,
     );
 
-    // Dropdown options for Courses and Sections tabs
     const programOptions = programs.map((p) => ({
         value: p.CourseID,
-        label: p.CourseCode,
+        label: `${p.CourseCode} · ${p.CourseName}`,
     }));
+    const { data: departments = [] } = useQuery({
+        queryKey: departmentsApi.key,
+        queryFn: departmentsApi.list,
+    });
+
+    const departmentOptions = [
+        { value: "", label: "Select department" },
+        ...departments
+            .filter((d) => d.Status === "Active")
+            .map((d) => ({
+                value: d.DepartmentID,
+                label: `${d.DepartmentName} (${d.DepartmentType})`,
+            })),
+    ];
+    // Programs can only belong to Teaching departments
+    const teachingDepartmentOptions = [
+        { value: "", label: "Select department" },
+        ...departments
+            .filter(
+                (d) => d.Status === "Active" && d.DepartmentType === "Teaching",
+            )
+            .map((d) => ({ value: d.DepartmentID, label: d.DepartmentName })),
+    ];
+
+    const programFields = [
+        PROGRAM_FIELDS[0], // code
+        PROGRAM_FIELDS[1], // name
+        {
+            key: "DepartmentID",
+            label: "Department",
+            numeric: true,
+            required: true,
+            options: teachingDepartmentOptions,
+        },
+        PROGRAM_FIELDS[2], // description
+        PROGRAM_FIELDS[3], // majors
+    ];
+
+    const refreshPositions = () =>
+        queryClient.invalidateQueries({ queryKey: positionsApi.key });
 
     const openAddProgram = () => {
-        setForm(emptyForm(PROGRAM_FIELDS));
+        setForm(emptyForm(programFields));
         setFormError(null);
         setModal({ mode: "add" });
     };
@@ -521,6 +699,7 @@ export default function AcademicStructure() {
         setForm({
             CourseCode: program.CourseCode,
             CourseName: program.CourseName,
+            DepartmentID: program.DepartmentID ?? "",
             Description: program.Description ?? "",
             Majors: (program.Majors ?? []).join(", "),
             Status: program.Status,
@@ -535,10 +714,11 @@ export default function AcademicStructure() {
         setFormError(null);
         try {
             const payload = buildPayload(
-                PROGRAM_FIELDS,
+                programFields,
                 form,
                 modal.mode === "edit",
             );
+
             payload.CourseCode = payload.CourseCode.toUpperCase();
             payload.Majors = payload.Majors
                 ? payload.Majors.split(",")
@@ -579,9 +759,6 @@ export default function AcademicStructure() {
                     <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
                         Academic Structure
                     </h1>
-                    <p className="text-xs text-slate-400 font-medium mt-0.5">
-                        Oct 7, 2026 · School Administration
-                    </p>
                 </div>
             </div>
 
@@ -596,7 +773,7 @@ export default function AcademicStructure() {
                     </h2>
                     <p className="text-xs text-slate-300 font-normal leading-relaxed">
                         Maintain the school's official program catalog,
-                        specializations, class sections, and assigned advisers.
+                        specializations, and class sections.
                     </p>
                 </div>
 
@@ -650,15 +827,23 @@ export default function AcademicStructure() {
 
                     {activeTab === "Programs" && (
                         <div className="flex items-center space-x-3 flex-1 sm:flex-initial justify-end">
+                            <StatusFilter
+                                value={statusFilter}
+                                onChange={(v) => {
+                                    setStatusFilter(v);
+                                    setPage(1);
+                                }}
+                            />
                             <div className="relative flex-1 sm:w-64">
                                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                                 <input
                                     type="text"
                                     placeholder="Search programs..."
                                     value={searchQuery}
-                                    onChange={(e) =>
-                                        setSearchQuery(e.target.value)
-                                    }
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setPage(1);
+                                    }}
                                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400"
                                 />
                             </div>
@@ -678,17 +863,17 @@ export default function AcademicStructure() {
                     <>
                         <ErrorBanner message={error} />
 
-                        {programsLoading ? (
+                        {pagedLoading ? (
                             <p className="py-8 text-center text-slate-400 text-xs">
                                 Loading programs...
                             </p>
-                        ) : filteredPrograms.length === 0 ? (
+                        ) : programRows.length === 0 ? (
                             <p className="py-8 text-center text-slate-400 text-xs">
                                 No programs found.
                             </p>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {filteredPrograms.map((program) => {
+                                {programRows.map((program) => {
                                     const majors = program.Majors ?? [];
                                     return (
                                         <div
@@ -712,6 +897,8 @@ export default function AcademicStructure() {
                                                                     "PRG",
                                                                     program.CourseID,
                                                                 )}
+                                                                {program.department &&
+                                                                    ` · ${program.department.DepartmentName}`}
                                                             </p>
                                                         </div>
                                                     </div>
@@ -788,6 +975,13 @@ export default function AcademicStructure() {
                                 })}
                             </div>
                         )}
+                        <Pagination
+                            page={page}
+                            lastPage={programLastPage}
+                            total={programTotal}
+                            perPage={PROGRAMS_PER_PAGE}
+                            onChange={setPage}
+                        />
                     </>
                 )}
 
@@ -795,60 +989,38 @@ export default function AcademicStructure() {
                 {activeTab === "Departments" && (
                     <EntityManager
                         title="Department Management"
-                        subtitle="Maintain school departments and their heads"
+                        subtitle="Maintain school departments"
                         singular="Department"
                         idKey="DepartmentID"
                         idPrefix="DEP"
                         api={departmentsApi}
+                        onChanged={() => {
+                            refreshPositions();
+                            refreshProgramList();
+                            queryClient.invalidateQueries({
+                                queryKey: subjectsApi.key,
+                            });
+                        }}
                         columns={[
                             { key: "DepartmentCode", label: "Code" },
                             { key: "DepartmentName", label: "Department" },
-                            { key: "DepartmentHead", label: "Head" },
+                            { key: "DepartmentType", label: "Type" },
                         ]}
                         fields={[
                             {
                                 key: "DepartmentCode",
                                 label: "Department Code",
-                                placeholder: "e.g. REG",
+                                placeholder: "e.g. CCS",
                                 required: true,
                             },
                             {
                                 key: "DepartmentName",
                                 label: "Department Name",
-                                placeholder: "e.g. Office of the Registrar",
+                                placeholder: "e.g. College of Computer Studies",
                                 required: true,
                             },
                             {
-                                key: "DepartmentHead",
-                                label: "Department Head",
-                                placeholder: "e.g. Elena Cruz",
-                            },
-                        ]}
-                    />
-                )}
-
-                {/* POSITIONS TAB */}
-                {activeTab === "Positions" && (
-                    <EntityManager
-                        title="Position Management"
-                        subtitle="Maintain job positions available to personnel"
-                        singular="Position"
-                        idKey="PositionID"
-                        idPrefix="POS"
-                        api={positionsApi}
-                        columns={[
-                            { key: "PositionTitle", label: "Position" },
-                            { key: "PositionType", label: "Type" },
-                        ]}
-                        fields={[
-                            {
-                                key: "PositionTitle",
-                                label: "Position Title",
-                                placeholder: "e.g. Office Staff",
-                                required: true,
-                            },
-                            {
-                                key: "PositionType",
+                                key: "DepartmentType",
                                 label: "Type",
                                 required: true,
                                 options: [
@@ -858,6 +1030,46 @@ export default function AcademicStructure() {
                                         label: "Non-Teaching",
                                     },
                                 ],
+                            },
+                        ]}
+                    />
+                )}
+
+                {/* POSITIONS TAB */}
+                {activeTab === "Positions" && (
+                    <EntityManager
+                        title="Position Management"
+                        subtitle="Maintain job positions under each department"
+                        singular="Position"
+                        idKey="PositionID"
+                        idPrefix="POS"
+                        api={positionsApi}
+                        columns={[
+                            { key: "PositionTitle", label: "Position" },
+                            {
+                                label: "Department",
+                                render: (p) =>
+                                    p.department?.DepartmentName ?? "—",
+                            },
+                            {
+                                label: "Type",
+                                render: (p) =>
+                                    p.department?.DepartmentType ?? "—",
+                            },
+                        ]}
+                        fields={[
+                            {
+                                key: "PositionTitle",
+                                label: "Position Title",
+                                placeholder: "e.g. Instructor",
+                                required: true,
+                            },
+                            {
+                                key: "DepartmentID",
+                                label: "Department",
+                                numeric: true,
+                                required: true,
+                                options: departmentOptions,
                             },
                         ]}
                     />
@@ -875,10 +1087,15 @@ export default function AcademicStructure() {
                         onChanged={refreshProgramList}
                         columns={[
                             { key: "SubjectCode", label: "Code" },
-                            { key: "SubjectTitle", label: "Course Title" },
+                            { key: "SubjectTitle", label: "Subject" },
                             {
                                 label: "Program",
                                 render: (s) => s.course?.CourseCode ?? "—",
+                            },
+                            {
+                                label: "Department",
+                                render: (s) =>
+                                    s.course?.department?.DepartmentName ?? "—",
                             },
                             { key: "Units", label: "Units" },
                         ]}
@@ -917,7 +1134,7 @@ export default function AcademicStructure() {
                 {activeTab === "Sections" && (
                     <EntityManager
                         title="Section Management"
-                        subtitle="Maintain class sections and assigned advisers"
+                        subtitle="Maintain class sections"
                         singular="Section"
                         idKey="SectionID"
                         idPrefix="SEC"
@@ -933,7 +1150,6 @@ export default function AcademicStructure() {
                                 label: "Year Level",
                                 render: (s) => yearLabel(s.YearLevel),
                             },
-                            { key: "Adviser", label: "Adviser" },
                         ]}
                         fields={[
                             {
@@ -955,11 +1171,6 @@ export default function AcademicStructure() {
                                 numeric: true,
                                 options: YEAR_LEVELS,
                             },
-                            {
-                                key: "Adviser",
-                                label: "Adviser",
-                                placeholder: "e.g. Prof. Santos",
-                            },
                         ]}
                     />
                 )}
@@ -973,7 +1184,7 @@ export default function AcademicStructure() {
                             ? "Edit Program"
                             : "Add New Program"
                     }
-                    fields={PROGRAM_FIELDS}
+                    fields={programFields}
                     form={form}
                     setForm={setForm}
                     showStatus={modal.mode === "edit"}

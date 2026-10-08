@@ -1,6 +1,7 @@
 // path: Frontend/src/utils/excel-export.js
 import ExcelJS from "exceljs";
 import { parseScannedAt } from "./global-helper";
+import { AlignCenter } from "lucide-react";
 
 const HEADER_FILL = "1B2537"; // matches your app's dark navy accent
 const HEADER_FONT_COLOR = "FFFFFF";
@@ -23,14 +24,15 @@ const buildLogRow = (log) => {
           })
         : "—";
 
+    const p = log.person ?? {};
     return [
-        log.student?.StudentNumber ?? "—",
-        `${log.student?.FirstName ?? ""} ${log.student?.LastName ?? ""}`.trim() ||
-            "—",
-        log.student?.course?.CourseName ?? "—",
-        log.student?.section?.SectionName ?? "—",
-        log.student?.school_year?.SchoolYearName ?? "—",
-        log.student?.YearLevel ?? "—",
+        p.number ?? "—",
+        p.name || "—",
+        p.type ?? "—",
+        p.group ?? "—",
+        p.subgroup ?? "—",
+        p.schoolYear ?? "—",
+        p.year ?? "—",
         log.LogType,
         datePart,
         timePart,
@@ -47,11 +49,15 @@ export async function exportLogsToExcel(logs, fromDate, toDate) {
     });
 
     // ---- Title block ----
-    sheet.mergeCells("A1:I1");
+    sheet.mergeCells("A1:J1");
     sheet.getCell("A1").value = `Monitoring Report (${fromDate} to ${toDate})`;
     sheet.getCell("A1").font = { size: 14, bold: true };
+    sheet.getCell("A1").alignment = {
+        horizontal: "center",
+        vertical: "middle",
+    };
 
-    sheet.mergeCells("A2:I2");
+    sheet.mergeCells("A2:J2");
     sheet.getCell("A2").value =
         `Generated: ${new Date().toLocaleString("en-US")}`;
     sheet.getCell("A2").font = {
@@ -59,19 +65,28 @@ export async function exportLogsToExcel(logs, fromDate, toDate) {
         italic: true,
         color: { argb: "FF64748B" },
     };
+    sheet.getCell("A2").alignment = {
+        horizontal: "center",
+        vertical: "middle",
+    };
 
-    sheet.mergeCells("A3:I3");
+    sheet.mergeCells("A3:J3");
     sheet.getCell("A3").value = `Total Records: ${logs.length}`;
     sheet.getCell("A3").font = { size: 10, bold: true };
+    sheet.getCell("A3").alignment = {
+        horizontal: "center",
+        vertical: "middle",
+    };
 
     // Row 4 left blank as a spacer
 
     // ---- Column widths (this is what actually fixes cramped/hidden text) ----
     sheet.columns = [
-        { key: "studentNumber", width: 20 },
-        { key: "studentName", width: 24 },
-        { key: "course", width: 26 },
-        { key: "section", width: 14 },
+        { key: "idNumber", width: 18 },
+        { key: "name", width: 26 },
+        { key: "person", width: 12 },
+        { key: "group", width: 32 },
+        { key: "subgroup", width: 24 },
         { key: "schoolYear", width: 14 },
         { key: "year", width: 8 },
         { key: "type", width: 12 },
@@ -82,10 +97,11 @@ export async function exportLogsToExcel(logs, fromDate, toDate) {
     // ---- Header row (row 5) ----
     const headerRow = sheet.getRow(5);
     headerRow.values = [
-        "STUDENT NUMBER",
-        "STUDENT NAME",
-        "COURSE",
-        "SECTION",
+        "ID NUMBER",
+        "NAME",
+        "PERSON",
+        "COURSE / DEPT",
+        "SECTION / POSITION",
         "SCHOOL YEAR",
         "YEAR",
         "TYPE",
@@ -116,7 +132,7 @@ export async function exportLogsToExcel(logs, fromDate, toDate) {
                 bottom: { style: "hair", color: { argb: "FFE2E8F0" } },
             };
             // Color-code the TYPE column (7th column) like your app's badges
-            if (colNumber === 7) {
+            if (colNumber === 8) {
                 cell.font = {
                     bold: true,
                     color: {

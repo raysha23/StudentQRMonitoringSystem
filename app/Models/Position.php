@@ -11,7 +11,12 @@ class Position extends Model
     const UPDATED_AT = 'UpdatedAt';
 
     protected $primaryKey = 'PositionID';
-    protected $fillable = ['PositionTitle', 'PositionType', 'Status'];
+    protected $fillable = ['PositionTitle', 'DepartmentID', 'Status'];
+
+    public function department()
+    {
+        return $this->belongsTo(Department::class, 'DepartmentID', 'DepartmentID');
+    }
 
     public function employees()
     {

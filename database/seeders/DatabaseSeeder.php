@@ -38,7 +38,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $sections = collect([
-            ['SectionName' => 'Charity', 'CourseID' => $courses[0]->CourseID, 'YearLevel' => 1, 'Adviser' => 'Prof. Santos'],
+            ['SectionName' => 'Charity', 'CourseID' => $courses[0]->CourseID, 'YearLevel' => 1],
         ])->map(fn($s) => Section::create($s + [
             'SchoolYearID' => $schoolYear->SchoolYearID,
             'Status' => 'Active',
@@ -51,5 +51,7 @@ class DatabaseSeeder extends Seeder
             'ScannerType' => 'Barcode',
             'Status' => 'Active',
         ]);
+
+        $this->call(MockDataSeeder::class);
     }
 }
