@@ -10,7 +10,7 @@ class CourseController extends Controller
 {
     public function index()
     {
-        return Course::withCount('sections')->orderBy('CourseCode')->get();
+        return Course::withCount('sections')->orderByDesc('CourseCode')->get();
     }
 
     public function store(Request $request)

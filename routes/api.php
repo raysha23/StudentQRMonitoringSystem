@@ -42,6 +42,7 @@ Route::controller(PersonBarcodeController::class)->group(function () {
 Route::controller(PersonLogController::class)->group(function () {
     Route::post('/scan', 'scan');
     Route::get('/person-logs/today', 'today');
+    Route::get('/person-logs/export', 'export');
 });
 
 Route::apiResource('person-logs', PersonLogController::class)->only(['index', 'show', 'destroy']);

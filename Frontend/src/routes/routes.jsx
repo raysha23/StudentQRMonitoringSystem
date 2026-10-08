@@ -7,19 +7,6 @@ import AcademicStructure from "../modules/academic-structure/academicStructure";
 
 export const routes = [
     {
-        id: "student-management",
-        label: "Student Management",
-        icon: User,
-        component: StudentManagementModule,
-    },
-    {
-        id: "employee-management",
-        label: "Personnel",
-        sublabel: "Employee Management",
-        icon: Briefcase,
-        component: EmployeeManagement,
-    },
-    {
         id: "time-tracking",
         label: "Time Tracking",
         sublabel: "Live Scanner",
@@ -32,6 +19,19 @@ export const routes = [
         sublabel: "Programs & Sections",
         icon: BookOpen,
         component: AcademicStructure,
+    },
+    {
+        id: "student-management",
+        label: "Student Management",
+        icon: User,
+        component: StudentManagementModule,
+    },
+    {
+        id: "employee-management",
+        label: "Personnel",
+        sublabel: "Employee Management",
+        icon: Briefcase,
+        component: EmployeeManagement,
     },
     {
         id: "report-management",

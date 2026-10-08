@@ -1,4 +1,5 @@
 // File Path: Frontend\src\modules\time-tracking\TimeTracking.jsx
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { QrCode, CheckCircle, Menu, X, AlertTriangle } from "lucide-react";
@@ -49,6 +50,7 @@ const THEMES = {
     },
 };
 
+const TODAY_KEY = ["person-logs", "today"];
 // Neutral theme used only for chrome that isn't tied to a specific scan result
 // (the page header, the scanner input box itself before anything is scanned).
 const NEUTRAL_THEME = THEMES["TIME IN"];
@@ -61,7 +63,23 @@ export default function TimeTracking({ scannerId = 1 }) {
     const [isScanning, setIsScanning] = useState(false);
     const [scanError, setScanError] = useState(null);
     const [isRecentOpen, setIsRecentOpen] = useState(true);
-    const [recentScans, setRecentScans] = useState([]);
+
+    const queryClient = useQueryClient();
+
+    const { data: recentScans = [] } = useQuery({
+        queryKey: TODAY_KEY,
+        queryFn: async () => {
+            const res = await getTodayPersonLogs();
+            return res.data
+                .map(mapLogToRecord)
+                .sort(
+                    (a, b) =>
+                        new Date(b.__scannedAt || 0) -
+                        new Date(a.__scannedAt || 0),
+                );
+        },
+    });
+
     const [activeCards, setActiveCards] = useState([]);
     const dismissTimers = useRef({});
     const inputRef = useRef(null);
@@ -78,32 +96,6 @@ export default function TimeTracking({ scannerId = 1 }) {
         [],
     );
 
-    // Load today's logs (Time In and Time Out together) on mount
-    useEffect(() => {
-        let cancelled = false;
-
-        getTodayPersonLogs()
-            .then((res) => {
-                if (cancelled) return;
-
-                const loaded = res.data.map(mapLogToRecord);
-
-                setRecentScans((prev) => {
-                    // Keep any scan made while this request was in flight
-                    const loadedIds = new Set(loaded.map((r) => r.id));
-                    return [...prev.filter((r) => !loadedIds.has(r.id)), ...loaded].sort(
-                        (a, b) =>
-                            new Date(b.__scannedAt || 0) -
-                            new Date(a.__scannedAt || 0),
-                    );
-                });
-            })
-            .catch((err) => console.error("Failed to load today's logs", err));
-
-        return () => {
-            cancelled = true;
-        };
-    }, []);
     // Keep the scanner input focused so hardware scanners (acting as keyboard input) always land here
     useEffect(() => {
         inputRef.current?.focus();
@@ -126,7 +118,11 @@ export default function TimeTracking({ scannerId = 1 }) {
                 });
 
                 const record = mapLogToRecord(res.data.log);
-                setRecentScans((prev) => [record, ...prev]);
+                queryClient.setQueryData(TODAY_KEY, (prev = []) => [
+                    record,
+                    ...prev.filter((r) => r.id !== record.id),
+                ]);
+
                 setActiveCards((prev) => [record, ...prev]);
 
                 dismissTimers.current[record.id] = setTimeout(() => {
@@ -145,7 +141,7 @@ export default function TimeTracking({ scannerId = 1 }) {
                 setIsScanning(false);
             }
         },
-        [scanInput, isScanning, scannerId],
+        [scanInput, isScanning, scannerId, queryClient],
     );
 
     return (
@@ -223,10 +219,11 @@ export default function TimeTracking({ scannerId = 1 }) {
 
                 {/* COLUMN 2: Sliding sidebar — combined Time In + Time Out feed */}
                 <div
-                    className={`bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${isRecentOpen
-                        ? "w-full lg:w-80 p-5 opacity-100"
-                        : "w-0 p-0 opacity-0 border-0"
-                        }`}
+                    className={`bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
+                        isRecentOpen
+                            ? "w-full lg:w-80 p-5 opacity-100"
+                            : "w-0 p-0 opacity-0 border-0"
+                    }`}
                 >
                     <button
                         onClick={() => setIsRecentOpen(false)}

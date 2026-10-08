@@ -6,12 +6,15 @@ use App\Models\Employee;
 use App\Models\PersonBarcode;
 use App\Models\Student;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class PersonBarcodeController extends Controller
 {
     private const FORMAT = 'CODE128';
     private const WITH = ['student', 'employee'];
+
+    // No 0, O, 1, I so codes are easy to read and type by hand
+    private const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    private const CODE_LENGTH = 6;
 
     public function index()
     {
@@ -26,14 +29,14 @@ class PersonBarcodeController extends Controller
     // GET /students/{student}/barcode
     public function forStudent(Student $student)
     {
-        return $this->activeOrIssue('StudentID', $student->StudentID, 'STU-' . $student->StudentNumber);
+        return $this->activeOrIssue('StudentID', $student->StudentID, 'STU');
     }
 
     // POST /students/{student}/barcode/reissue
     public function reissueForStudent(Student $student)
     {
         return response()->json(
-            $this->issue('StudentID', $student->StudentID, 'STU-' . $student->StudentNumber),
+            $this->issue('StudentID', $student->StudentID, 'STU'),
             201
         );
     }
@@ -41,14 +44,14 @@ class PersonBarcodeController extends Controller
     // GET /employees/{employee}/barcode
     public function forEmployee(Employee $employee)
     {
-        return $this->activeOrIssue('EmployeeID', $employee->EmployeeID, 'EMP-' . $employee->EmployeeNo);
+        return $this->activeOrIssue('EmployeeID', $employee->EmployeeID, 'EMP');
     }
 
     // POST /employees/{employee}/barcode/reissue
     public function reissueForEmployee(Employee $employee)
     {
         return response()->json(
-            $this->issue('EmployeeID', $employee->EmployeeID, 'EMP-' . $employee->EmployeeNo),
+            $this->issue('EmployeeID', $employee->EmployeeID, 'EMP'),
             201
         );
     }
@@ -68,7 +71,7 @@ class PersonBarcodeController extends Controller
                 ->update(['Status' => 'Inactive', 'DeactivatedAt' => now()]);
 
             do {
-                $value = $prefix . '-' . Str::upper(Str::random(6));
+                $value = $prefix . '-' . $this->randomCode(self::CODE_LENGTH);
             } while (PersonBarcode::where('BarcodeValue', $value)->exists());
 
             // Only one of StudentID / EmployeeID is ever set
@@ -80,5 +83,17 @@ class PersonBarcodeController extends Controller
                 'GeneratedAt'   => now(),
             ]);
         });
+    }
+
+    private function randomCode(int $length): string
+    {
+        $max  = strlen(self::ALPHABET) - 1;
+        $code = '';
+
+        for ($i = 0; $i < $length; $i++) {
+            $code .= self::ALPHABET[random_int(0, $max)];
+        }
+
+        return $code;
     }
 }

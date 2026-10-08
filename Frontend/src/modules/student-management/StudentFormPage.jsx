@@ -59,6 +59,10 @@ export default function StudentFormPage({
         avatarSeed,
     )}`;
 
+    // Only sections that belong to the chosen course
+    const availableSections = sections.filter(
+        (s) => Number(s.CourseID) === Number(formData.CourseID),
+    );
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto">
             {/* Header */}
@@ -316,6 +320,7 @@ export default function StudentFormPage({
                                         setFormData({
                                             ...formData,
                                             CourseID: e.target.value,
+                                            SectionID: "", // old section may not belong to the new course
                                         })
                                     }
                                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
@@ -344,10 +349,17 @@ export default function StudentFormPage({
                                             SectionID: e.target.value,
                                         })
                                     }
-                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
+                                    disabled={!formData.CourseID}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <option value="">Select section</option>
-                                    {sections.map((s) => (
+                                    <option value="">
+                                        {formData.CourseID
+                                            ? availableSections.length > 0
+                                                ? "Select section"
+                                                : "No sections for this course"
+                                            : "Select a course first"}
+                                    </option>
+                                    {availableSections.map((s) => (
                                         <option
                                             key={s.SectionID}
                                             value={s.SectionID}
@@ -479,7 +491,7 @@ export default function StudentFormPage({
                                 </p>
                             )}
                         </div>
-                        
+
                         <div className="pt-3 flex items-center justify-end space-x-2 border-t border-slate-100">
                             <button
                                 type="button"

@@ -1,3 +1,8 @@
+import {
+    useQuery,
+    useQueryClient,
+    keepPreviousData,
+} from "@tanstack/react-query";
 import React, { useState, useMemo, useEffect } from "react";
 import {
     Clock,
@@ -46,17 +51,18 @@ const emptyForm = {
 };
 
 export default function StudentManagementModule() {
-    const [students, setStudents] = useState([]);
+    const queryClient = useQueryClient();
+
     const [courses, setCourses] = useState([]);
     const [sections, setSections] = useState([]);
     const [schoolYears, setSchoolYears] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
 
-    const [searchQuery, setSearchQuery] = useState("");
-    const [selectedCourse, setSelectedCourse] = useState("All Courses");
-    const [selectedYear, setSelectedYear] = useState("All Year Levels");
-    const [selectedStatus, setSelectedStatus] = useState("All Status");
+    // "" means "All" for every filter. Course holds the CourseID.
+    const [searchInput, setSearchInput] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [selectedCourse, setSelectedCourse] = useState("");
+    const [selectedYear, setSelectedYear] = useState("");
+    const [selectedStatus, setSelectedStatus] = useState("");
 
     const [formMode, setFormMode] = useState(null); // null | "add" | "edit"
 
@@ -69,31 +75,76 @@ export default function StudentManagementModule() {
     const [currentPage, setCurrentPage] = useState(1);
     const studentsPerPage = 15;
 
+    // Courses, sections and school years (lookups for the table and the form)
     useEffect(() => {
-        loadAll();
+        (async () => {
+            try {
+                const [coursesRes, sectionsRes, schoolYearsRes] =
+                    await Promise.all([
+                        getCourses(),
+                        getSections(),
+                        getSchoolYears(),
+                    ]);
+                setCourses(coursesRes.data);
+                setSections(sectionsRes.data);
+                setSchoolYears(schoolYearsRes.data);
+            } catch (err) {
+                console.error("Failed to load lookups", err);
+            }
+        })();
     }, []);
 
-    const loadAll = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const [studentsRes, coursesRes, sectionsRes, schoolYearsRes] =
-                await Promise.all([
-                    getStudents(),
-                    getCourses(),
-                    getSections(),
-                    getSchoolYears(),
-                ]);
-            setStudents(studentsRes.data);
-            setCourses(coursesRes.data);
-            setSections(sectionsRes.data);
-            setSchoolYears(schoolYearsRes.data);
-        } catch (err) {
-            setError("Failed to load data. Is the backend running?");
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
+    // Wait until the user stops typing before hitting the server
+    useEffect(() => {
+        const t = setTimeout(() => {
+            setDebouncedSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 400);
+        return () => clearTimeout(t);
+    }, [searchInput]);
+
+    const params = {
+        page: currentPage,
+        per_page: studentsPerPage,
+        search: debouncedSearch || undefined,
+        course_id: selectedCourse || undefined,
+        year_level: selectedYear || undefined,
+        status: selectedStatus || undefined,
+    };
+
+    const {
+        data,
+        isLoading: loading,
+        isFetching,
+        error: queryError,
+        refetch,
+    } = useQuery({
+        queryKey: ["students", params],
+        queryFn: async () => (await getStudents(params)).data,
+        placeholderData: keepPreviousData, // keeps the old page visible while the next loads
+    });
+
+    const students = data?.data ?? [];
+    const totalRecords = data?.total ?? 0;
+    const totalPages = Math.max(1, data?.last_page ?? 1);
+    const metrics = {
+        total: data?.stats?.total ?? 0,
+        active: data?.stats?.enrolled ?? 0,
+        inactive: data?.stats?.not_enrolled ?? 0,
+    };
+
+    const error = queryError
+        ? queryError.response?.data?.message ||
+          "Failed to load data. Is the backend running?"
+        : null;
+
+    const refreshStudents = () =>
+        queryClient.invalidateQueries({ queryKey: ["students"] });
+
+    // Sets a filter and goes back to page 1 in the same update (one request)
+    const pick = (setter) => (e) => {
+        setter(e.target.value);
+        setCurrentPage(1);
     };
 
     const courseName = (id) =>
@@ -102,64 +153,6 @@ export default function StudentManagementModule() {
     const sectionName = (id) =>
         sections.find((s) => Number(s.SectionID) === Number(id))?.SectionName ||
         "—";
-
-    const metrics = useMemo(() => {
-        const total = students.length;
-        const active = students.filter((s) => s.Status === "Enrolled").length;
-        const inactive = students.filter((s) => s.Status !== "Enrolled").length;
-        return { total, active, inactive };
-    }, [students]);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchQuery, selectedCourse, selectedYear, selectedStatus]);
-
-    const filteredStudents = useMemo(() => {
-        return students.filter((student) => {
-            const fullName =
-                `${student.FirstName} ${student.LastName}`.toLowerCase();
-            const matchesSearch =
-                fullName.includes(searchQuery.toLowerCase()) ||
-                student.StudentNumber?.toLowerCase().includes(
-                    searchQuery.toLowerCase(),
-                ) ||
-                student.Email?.toLowerCase().includes(
-                    searchQuery.toLowerCase(),
-                );
-
-            const matchesCourse =
-                selectedCourse === "All Courses" ||
-                courseName(student.CourseID) === selectedCourse;
-            const matchesYear =
-                selectedYear === "All Year Levels" ||
-                String(student.YearLevel) === selectedYear;
-            const matchesStatus =
-                selectedStatus === "All Status" ||
-                student.Status === selectedStatus;
-
-            return (
-                matchesSearch && matchesCourse && matchesYear && matchesStatus
-            );
-        });
-    }, [
-        students,
-        searchQuery,
-        selectedCourse,
-        selectedYear,
-        selectedStatus,
-        courses,
-        sections,
-    ]);
-
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredStudents.length / studentsPerPage),
-    );
-
-    const paginatedStudents = useMemo(() => {
-        const start = (currentPage - 1) * studentsPerPage;
-        return filteredStudents.slice(start, start + studentsPerPage);
-    }, [filteredStudents, currentPage]);
 
     const buildFormData = () => {
         const fd = new FormData();
@@ -191,8 +184,9 @@ export default function StudentManagementModule() {
     const handleCreateStudent = async (e) => {
         e.preventDefault();
         try {
-            const res = await createStudent(buildFormData());
-            setStudents([res.data, ...students]);
+            await createStudent(buildFormData());
+            setCurrentPage(1); // newest students are on page 1
+            await refreshStudents();
             setFormMode(null);
             resetForm();
         } catch (err) {
@@ -206,12 +200,8 @@ export default function StudentManagementModule() {
         try {
             const fd = buildFormData();
             fd.append("_method", "PUT"); // Laravel method-spoofing for multipart PUT
-            const res = await updateStudent(selectedStudent.StudentID, fd);
-            setStudents(
-                students.map((s) =>
-                    s.StudentID === selectedStudent.StudentID ? res.data : s,
-                ),
-            );
+            await updateStudent(selectedStudent.StudentID, fd);
+            await refreshStudents();
             setFormMode(null);
             setSelectedStudent(null);
         } catch (err) {
@@ -223,10 +213,12 @@ export default function StudentManagementModule() {
     const handleDeleteStudent = async () => {
         if (!studentToDelete) return;
         await deleteStudent(studentToDelete.StudentID); // throws on failure, the modal shows it
-        setStudents(
-            students.filter((s) => s.StudentID !== studentToDelete.StudentID),
-        );
         setStudentToDelete(null);
+        // If that was the last row on the page, step back one page
+        if (students.length === 1 && currentPage > 1) {
+            setCurrentPage((p) => p - 1);
+        }
+        await refreshStudents();
     };
 
     const openEditModal = (student) => {
@@ -270,7 +262,7 @@ export default function StudentManagementModule() {
                 <div className="p-8 text-center text-rose-500 text-sm">
                     {error}
                     <button
-                        onClick={loadAll}
+                        onClick={() => refetch()}
                         className="block mx-auto mt-3 px-4 py-2 bg-slate-800 text-white rounded-lg text-xs"
                     >
                         Retry
@@ -354,8 +346,8 @@ export default function StudentManagementModule() {
                         <input
                             type="text"
                             placeholder="Search by name, student no., or email..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
                             className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:bg-white transition-all"
                         />
                     </div>
@@ -364,14 +356,12 @@ export default function StudentManagementModule() {
                         <div className="relative">
                             <select
                                 value={selectedCourse}
-                                onChange={(e) =>
-                                    setSelectedCourse(e.target.value)
-                                }
+                                onChange={pick(setSelectedCourse)}
                                 className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors truncate"
                             >
-                                <option>All Courses</option>
+                                <option value="">All Courses</option>
                                 {courses.map((c) => (
-                                    <option key={c.CourseID}>
+                                    <option key={c.CourseID} value={c.CourseID}>
                                         {c.CourseName}
                                     </option>
                                 ))}
@@ -382,12 +372,10 @@ export default function StudentManagementModule() {
                         <div className="relative">
                             <select
                                 value={selectedYear}
-                                onChange={(e) =>
-                                    setSelectedYear(e.target.value)
-                                }
+                                onChange={pick(setSelectedYear)}
                                 className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors truncate"
                             >
-                                <option>All Year Levels</option>
+                                <option value="">All Year Levels</option>
                                 <option value="1">1st Year</option>
                                 <option value="2">2nd Year</option>
                                 <option value="3">3rd Year</option>
@@ -399,14 +387,14 @@ export default function StudentManagementModule() {
                         <div className="relative">
                             <select
                                 value={selectedStatus}
-                                onChange={(e) =>
-                                    setSelectedStatus(e.target.value)
-                                }
+                                onChange={pick(setSelectedStatus)}
                                 className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-xs font-semibold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors truncate"
                             >
-                                <option>All Status</option>
-                                <option>Enrolled</option>
-                                <option>Not Enrolled</option>
+                                <option value="">All Status</option>
+                                <option value="Enrolled">Enrolled</option>
+                                <option value="Not Enrolled">
+                                    Not Enrolled
+                                </option>
                             </select>
                             <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                         </div>
@@ -425,7 +413,9 @@ export default function StudentManagementModule() {
                 </div>
 
                 <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
+                    <div
+                        className={`overflow-x-auto transition-opacity ${isFetching ? "opacity-60" : ""}`}
+                    >
                         <table className="w-full text-left border-collapse whitespace-nowrap">
                             <thead>
                                 <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
@@ -444,8 +434,8 @@ export default function StudentManagementModule() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 text-xs">
-                                {paginatedStudents.length > 0 ? (
-                                    paginatedStudents.map((student) => (
+                                {students.length > 0 ? (
+                                    students.map((student) => (
                                         <tr
                                             key={student.StudentID}
                                             className="hover:bg-slate-50/70 transition-colors group"
@@ -475,8 +465,8 @@ export default function StudentManagementModule() {
                                                         {student.FirstName}{" "}
                                                         {student.MiddleName
                                                             ? student.MiddleName.charAt(
-                                                                0,
-                                                            ) + ". "
+                                                                  0,
+                                                              ) + ". "
                                                             : ""}
                                                         {student.LastName}
                                                         {student.Suffix
@@ -511,7 +501,7 @@ export default function StudentManagementModule() {
                                             </td>
                                             <td className="py-3.5 px-4">
                                                 {student.Status ===
-                                                    "Enrolled" ? (
+                                                "Enrolled" ? (
                                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-medium bg-emerald-100/70 text-emerald-700">
                                                         Enrolled
                                                     </span>
@@ -533,7 +523,7 @@ export default function StudentManagementModule() {
                                                             );
                                                         }}
                                                         title="View Barcode"
-                                                        className="p-1 hover:text-slate-800 rounded transition-colors"
+                                                        className="p-1 hover:text-slate-800 rounded transition-colors cursor-pointer"
                                                     >
                                                         <Barcode className="w-4 h-4" />
                                                     </button>
@@ -578,16 +568,16 @@ export default function StudentManagementModule() {
                         </table>
                     </div>
 
-                    {filteredStudents.length > 0 && (
+                    {totalRecords > 0 && (
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-slate-100">
                             <p className="text-[11px] text-slate-400 font-medium">
                                 Showing{" "}
                                 {(currentPage - 1) * studentsPerPage + 1}–
                                 {Math.min(
                                     currentPage * studentsPerPage,
-                                    filteredStudents.length,
+                                    totalRecords,
                                 )}{" "}
-                                of {filteredStudents.length}
+                                of {totalRecords}
                             </p>
 
                             <div className="flex items-center gap-1.5">

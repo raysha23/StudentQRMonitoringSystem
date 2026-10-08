@@ -1,7 +1,7 @@
 // File path: Frontend\src\api\student-api.js
 import api from "./client";
 
-export const getStudents = () => api.get("/students");
+export const getStudents = (params) => api.get("/students", { params });
 
 export const getStudent = (id) => api.get(`/students/${id}`);
 

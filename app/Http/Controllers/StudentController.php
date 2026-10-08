@@ -8,14 +8,71 @@ use Illuminate\Support\Facades\Storage;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver;
 use Intervention\Image\Format;
+use Illuminate\Validation\Rule;
 
 class StudentController extends Controller
 {
-    public function index()
+    // GET /students?page=&per_page=&search=&course_id=&year_level=&status=
+    public function index(Request $request)
     {
-        return Student::orderBy('StudentID', 'desc')->get();
+        $request->validate([
+            'per_page'   => 'nullable|integer|min:1|max:100',
+            'search'     => 'nullable|string|max:100',
+            'course_id'  => 'nullable|integer',
+            'year_level' => 'nullable|integer',
+            'status'     => 'nullable|string|max:20',
+        ]);
+
+        $query = Student::query();
+
+        if ($request->filled('course_id')) {
+            $query->where('CourseID', $request->query('course_id'));
+        }
+
+        if ($request->filled('year_level')) {
+            $query->where('YearLevel', $request->query('year_level'));
+        }
+
+        $search = trim((string) $request->query('search', ''));
+        if ($search !== '') {
+            $like = '%' . addcslashes($search, '%_\\') . '%';
+
+            $query->where(function ($w) use ($like) {
+                $w->where('StudentNumber', 'like', $like)
+                    ->orWhere('FirstName', 'like', $like)
+                    ->orWhere('LastName', 'like', $like)
+                    ->orWhere('Email', 'like', $like)
+                    ->orWhereRaw("CONCAT(FirstName, ' ', LastName) like ?", [$like]);
+            });
+        }
+
+        // Summary card counts: use every filter EXCEPT status,
+        // so the cards still show the Enrolled / Not Enrolled split
+        $counts = (clone $query)
+            ->selectRaw('Status, COUNT(*) as aggregate')
+            ->groupBy('Status')
+            ->pluck('aggregate', 'Status');
+
+        $total    = (int) $counts->sum();
+        $enrolled = (int) ($counts['Enrolled'] ?? 0);
+
+        if ($request->filled('status')) {
+            $query->where('Status', $request->query('status'));
+        }
+
+        $paginator = $query
+            ->orderByDesc('StudentID')
+            ->paginate((int) $request->query('per_page', 15));
+
+        return response()->json($paginator->toArray() + [
+            'stats' => [
+                'total'    => $total,
+                'enrolled' => $enrolled,
+                'not_enrolled' => $total - $enrolled,
+            ],
+        ]);
     }
-    
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -65,7 +122,12 @@ class StudentController extends Controller
             'ContactNumber' => 'nullable|string|max:30',
             'Email' => 'nullable|email|max:150',
             'CourseID' => 'required|integer|exists:courses,CourseID',
-            'SectionID' => 'required|integer|exists:sections,SectionID',
+            'SectionID' => [
+                'required',
+                'integer',
+                Rule::exists('sections', 'SectionID')
+                    ->where('CourseID', $request->input('CourseID')),
+            ],
             'YearLevel' => 'nullable|integer',
             'SchoolYearID' => 'required|integer|exists:school_years,SchoolYearID',
             'Status' => 'required|string|max:20',

@@ -3,6 +3,7 @@ import api from "./client";
 
 // Builds list / get / create / update / remove for one resource
 const crud = (resource) => ({
+    key: [resource],
     list: async () => (await api.get(`/${resource}`)).data,
     get: async (id) => (await api.get(`/${resource}/${id}`)).data,
     create: async (payload) => (await api.post(`/${resource}`, payload)).data,

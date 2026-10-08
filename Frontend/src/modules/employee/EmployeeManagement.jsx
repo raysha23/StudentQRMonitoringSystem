@@ -1,34 +1,42 @@
 // File Path: Frontend\src\modules\employee\EmployeeManagement.jsx
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
-    Search, Plus, Edit2, Trash2, Users, UserCheck, GraduationCap, Barcode,
-} from 'lucide-react';
+    Search,
+    Plus,
+    Edit2,
+    Trash2,
+    Users,
+    UserCheck,
+    GraduationCap,
+    Barcode,
+    X,
+} from "lucide-react";
 import {
     getEmployees,
     createEmployee,
     updateEmployee,
     deleteEmployee,
-} from '../../api/employee-api';
+} from "../../api/employee-api";
 import {
     positionsApi,
     departmentsApi,
     getErrorMessage,
-} from '../../api/academic-management-api';
-import BarCodeModal from '../../utils/general-modal/BarCodeModal';
-import DeleteConfirmationModal from '../../utils/general-modal/DeleteConfirmationModal';
-import EmployeeFormPage from './EmployeeFormPage';
+} from "../../api/academic-management-api";
+import BarCodeModal from "../../utils/general-modal/BarCodeModal";
+import DeleteConfirmationModal from "../../utils/general-modal/DeleteConfirmationModal";
+import EmployeeFormPage from "./EmployeeFormPage";
 
 const EMPTY_FORM = {
-    EmployeeNo: '',
-    FullName: '',
-    PositionID: '',
-    DepartmentID: '',
-    Email: '',
-    Phone: '',
-    Status: 'Active',
-    ProfilePicture: '', // preview URL (saved photo or a temporary blob)
-    OriginalPicture: '', // the saved photo, so "Undo new photo" can restore it
+    EmployeeNo: "",
+    FullName: "",
+    PositionID: "",
+    DepartmentID: "",
+    Email: "",
+    Phone: "",
+    Status: "Active",
+    ProfilePicture: "", // preview URL (saved photo or a temporary blob)
+    OriginalPicture: "", // the saved photo, so "Undo new photo" can restore it
     ProfilePictureFile: null, // the real File to upload, only set when a new one is picked
 };
 
@@ -43,8 +51,8 @@ export default function EmployeeManagement() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const [searchQuery, setSearchQuery] = useState('');
-    const [selectedPosition, setSelectedPosition] = useState('All');
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedPosition, setSelectedPosition] = useState("All");
     const [currentPage, setCurrentPage] = useState(1);
     const employeesPerPage = 15;
     // Form page state
@@ -56,7 +64,7 @@ export default function EmployeeManagement() {
 
     const [barcodeEmployee, setBarcodeEmployee] = useState(null);
     const [employeeToDelete, setEmployeeToDelete] = useState(null);
-
+    const [viewingPhotoEmployee, setViewingPhotoEmployee] = useState(null);
     const loadAll = useCallback(async () => {
         setError(null);
         try {
@@ -69,7 +77,7 @@ export default function EmployeeManagement() {
             setPositions(pos);
             setDepartments(deps);
         } catch (err) {
-            setError(getErrorMessage(err, 'Failed to load personnel.'));
+            setError(getErrorMessage(err, "Failed to load personnel."));
         } finally {
             setLoading(false);
         }
@@ -91,10 +99,12 @@ export default function EmployeeManagement() {
                 emp.FullName.toLowerCase().includes(q) ||
                 emp.EmployeeNo.toLowerCase().includes(q) ||
                 emp.Email.toLowerCase().includes(q) ||
-                (emp.department?.DepartmentName ?? '').toLowerCase().includes(q);
+                (emp.department?.DepartmentName ?? "")
+                    .toLowerCase()
+                    .includes(q);
 
             const matchesPosition =
-                selectedPosition === 'All' ||
+                selectedPosition === "All" ||
                 String(emp.PositionID) === selectedPosition;
 
             return matchesSearch && matchesPosition;
@@ -103,7 +113,7 @@ export default function EmployeeManagement() {
 
     const totalPages = Math.max(
         1,
-        Math.ceil(filteredEmployees.length / employeesPerPage)
+        Math.ceil(filteredEmployees.length / employeesPerPage),
     );
 
     const paginatedEmployees = useMemo(() => {
@@ -113,17 +123,20 @@ export default function EmployeeManagement() {
 
     // Statistics
     const totalPersonnel = employees.length;
-    const activePersonnel = employees.filter((e) => e.Status === 'Active').length;
+    const activePersonnel = employees.filter(
+        (e) => e.Status === "Active",
+    ).length;
     const inactivePersonnel = totalPersonnel - activePersonnel;
     const facultyMembers = employees.filter(
-        (e) => e.position?.PositionType === 'Teaching'
+        (e) => e.position?.PositionType === "Teaching",
     ).length;
 
     // Positions offered in the form: active ones, plus the employee's current one when editing
     const positionOptions = positions.filter(
         (p) =>
-            p.Status === 'Active' ||
-            (formMode === 'edit' && p.PositionID === selectedEmployee?.PositionID)
+            p.Status === "Active" ||
+            (formMode === "edit" &&
+                p.PositionID === selectedEmployee?.PositionID),
     );
 
     /* ---------------- Form handlers ---------------- */
@@ -131,11 +144,12 @@ export default function EmployeeManagement() {
     const openAdd = () => {
         setFormData({
             ...EMPTY_FORM,
-            PositionID: positions.find((p) => p.Status === 'Active')?.PositionID ?? '',
+            PositionID:
+                positions.find((p) => p.Status === "Active")?.PositionID ?? "",
         });
         setFormError(null);
         setSelectedEmployee(null);
-        setFormMode('add');
+        setFormMode("add");
     };
 
     const openEdit = (emp) => {
@@ -143,21 +157,21 @@ export default function EmployeeManagement() {
             EmployeeNo: emp.EmployeeNo,
             FullName: emp.FullName,
             PositionID: emp.PositionID,
-            DepartmentID: emp.DepartmentID ?? '',
+            DepartmentID: emp.DepartmentID ?? "",
             Email: emp.Email,
-            Phone: emp.Phone ?? '',
+            Phone: emp.Phone ?? "",
             Status: emp.Status,
-            ProfilePicture: emp.ProfilePictureUrl ?? '',
-            OriginalPicture: emp.ProfilePictureUrl ?? '',
+            ProfilePicture: emp.ProfilePictureUrl ?? "",
+            OriginalPicture: emp.ProfilePictureUrl ?? "",
             ProfilePictureFile: null,
         });
         setFormError(null);
         setSelectedEmployee(emp);
-        setFormMode('edit');
+        setFormMode("edit");
     };
 
     const closeForm = () => {
-        if (formData.ProfilePicture?.startsWith('blob:')) {
+        if (formData.ProfilePicture?.startsWith("blob:")) {
             URL.revokeObjectURL(formData.ProfilePicture);
         }
         setFormMode(null);
@@ -168,16 +182,16 @@ export default function EmployeeManagement() {
 
     const buildFormData = () => {
         const fd = new FormData();
-        fd.append('FullName', formData.FullName.trim());
-        fd.append('PositionID', formData.PositionID);
-        fd.append('DepartmentID', formData.DepartmentID); // empty string becomes null on the server
-        fd.append('Email', formData.Email.trim());
-        fd.append('Phone', formData.Phone);
-        if (formMode === 'edit') fd.append('Status', formData.Status);
+        fd.append("FullName", formData.FullName.trim());
+        fd.append("PositionID", formData.PositionID);
+        fd.append("DepartmentID", formData.DepartmentID); // empty string becomes null on the server
+        fd.append("Email", formData.Email.trim());
+        fd.append("Phone", formData.Phone);
+        if (formMode === "edit") fd.append("Status", formData.Status);
 
         // Only attach a file if a new one was actually picked
         if (formData.ProfilePictureFile) {
-            fd.append('ProfilePicture', formData.ProfilePictureFile);
+            fd.append("ProfilePicture", formData.ProfilePictureFile);
         }
         return fd;
     };
@@ -188,15 +202,18 @@ export default function EmployeeManagement() {
         setFormError(null);
 
         try {
-            if (formMode === 'edit') {
-                await updateEmployee(selectedEmployee.EmployeeID, buildFormData());
+            if (formMode === "edit") {
+                await updateEmployee(
+                    selectedEmployee.EmployeeID,
+                    buildFormData(),
+                );
             } else {
                 await createEmployee(buildFormData());
             }
             closeForm();
             await loadAll();
         } catch (err) {
-            setFormError(getErrorMessage(err, 'Failed to save employee.'));
+            setFormError(getErrorMessage(err, "Failed to save employee."));
         } finally {
             setSaving(false);
         }
@@ -208,10 +225,10 @@ export default function EmployeeManagement() {
         await loadAll();
     };
 
-    const today = new Date().toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
+    const today = new Date().toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
     });
 
     /* ---------------- Form page view ---------------- */
@@ -220,8 +237,8 @@ export default function EmployeeManagement() {
         return (
             <EmployeeFormPage
                 title={
-                    formMode === 'add'
-                        ? 'Add New Employee'
+                    formMode === "add"
+                        ? "Add New Employee"
                         : `Edit Employee (${selectedEmployee?.EmployeeNo})`
                 }
                 mode={formMode}
@@ -233,7 +250,9 @@ export default function EmployeeManagement() {
                 serverError={formError}
                 onSubmit={handleSubmit}
                 onClose={closeForm}
-                submitLabel={formMode === 'add' ? 'Save Employee' : 'Update Employee'}
+                submitLabel={
+                    formMode === "add" ? "Save Employee" : "Update Employee"
+                }
             />
         );
     }
@@ -242,7 +261,6 @@ export default function EmployeeManagement() {
 
     return (
         <div className="bg-slate-50 min-h-screen p-6 font-sans text-slate-800 space-y-6">
-
             {/* HEADER BAR */}
             <div className="flex items-center justify-between pb-2">
                 <div>
@@ -265,8 +283,12 @@ export default function EmployeeManagement() {
                         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                             TOTAL PERSONNEL
                         </p>
-                        <h2 className="text-3xl font-extrabold text-slate-900">{totalPersonnel}</h2>
-                        <p className="text-[11px] text-slate-400 pt-1">All employee records</p>
+                        <h2 className="text-3xl font-extrabold text-slate-900">
+                            {totalPersonnel}
+                        </h2>
+                        <p className="text-[11px] text-slate-400 pt-1">
+                            All employee records
+                        </p>
                     </div>
                 </div>
 
@@ -278,7 +300,9 @@ export default function EmployeeManagement() {
                         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                             ACTIVE PERSONNEL
                         </p>
-                        <h2 className="text-3xl font-extrabold text-slate-900">{activePersonnel}</h2>
+                        <h2 className="text-3xl font-extrabold text-slate-900">
+                            {activePersonnel}
+                        </h2>
                         <p className="text-[11px] text-slate-400 pt-1">
                             {inactivePersonnel} currently inactive
                         </p>
@@ -293,8 +317,12 @@ export default function EmployeeManagement() {
                         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                             FACULTY MEMBERS
                         </p>
-                        <h2 className="text-3xl font-extrabold text-slate-900">{facultyMembers}</h2>
-                        <p className="text-[11px] text-slate-400 pt-1">Teaching staff</p>
+                        <h2 className="text-3xl font-extrabold text-slate-900">
+                            {facultyMembers}
+                        </h2>
+                        <p className="text-[11px] text-slate-400 pt-1">
+                            Teaching staff
+                        </p>
                     </div>
                 </div>
             </div>
@@ -307,7 +335,6 @@ export default function EmployeeManagement() {
 
             {/* PERSONNEL DIRECTORY TABLE CONTAINER */}
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-
                 {/* DIRECTORY HEADER & CONTROLS */}
                 <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div>
@@ -333,12 +360,17 @@ export default function EmployeeManagement() {
 
                         <select
                             value={selectedPosition}
-                            onChange={(e) => setSelectedPosition(e.target.value)}
+                            onChange={(e) =>
+                                setSelectedPosition(e.target.value)
+                            }
                             className="bg-white border-2 border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
                         >
                             <option value="All">All Positions</option>
                             {positions.map((p) => (
-                                <option key={p.PositionID} value={String(p.PositionID)}>
+                                <option
+                                    key={p.PositionID}
+                                    value={String(p.PositionID)}
+                                >
                                     {p.PositionTitle}
                                 </option>
                             ))}
@@ -364,27 +396,45 @@ export default function EmployeeManagement() {
                                 <th className="py-3.5 px-6">DEPARTMENT</th>
                                 <th className="py-3.5 px-6">CONTACT</th>
                                 <th className="py-3.5 px-6">STATUS</th>
-                                <th className="py-3.5 px-6 text-right">ACTIONS</th>
+                                <th className="py-3.5 px-6 text-right">
+                                    ACTIONS
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="6" className="py-8 text-center text-slate-400 text-xs">
+                                    <td
+                                        colSpan="6"
+                                        className="py-8 text-center text-slate-400 text-xs"
+                                    >
                                         Loading personnel...
                                     </td>
                                 </tr>
                             ) : paginatedEmployees.length > 0 ? (
                                 paginatedEmployees.map((emp) => (
-                                    <tr key={emp.EmployeeID} className="hover:bg-slate-50/80 transition">
-
+                                    <tr
+                                        key={emp.EmployeeID}
+                                        className="hover:bg-slate-50/80 transition"
+                                    >
                                         <td className="py-4 px-6">
                                             <div className="flex items-center space-x-3">
-                                                <img
-                                                    src={avatarFor(emp)}
-                                                    alt={emp.FullName}
-                                                    className="w-9 h-9 rounded-full object-cover border border-slate-200"
-                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setViewingPhotoEmployee(
+                                                            emp,
+                                                        )
+                                                    }
+                                                    className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-slate-300"
+                                                    title="View photo"
+                                                >
+                                                    <img
+                                                        src={avatarFor(emp)}
+                                                        alt={emp.FullName}
+                                                        className="w-9 h-9 rounded-full object-cover border border-slate-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                                    />
+                                                </button>
                                                 <div>
                                                     <p className="font-extrabold text-slate-800 leading-tight">
                                                         {emp.FullName}
@@ -398,23 +448,27 @@ export default function EmployeeManagement() {
 
                                         <td className="py-4 px-6">
                                             <span className="inline-block bg-blue-50 text-blue-700 text-[11px] font-semibold px-3 py-1 rounded-md">
-                                                {emp.position?.PositionTitle ?? '—'}
+                                                {emp.position?.PositionTitle ??
+                                                    "—"}
                                             </span>
                                         </td>
 
                                         <td className="py-4 px-6 font-medium text-slate-600">
-                                            {emp.department?.DepartmentName ?? '—'}
+                                            {emp.department?.DepartmentName ??
+                                                "—"}
                                         </td>
 
                                         <td className="py-4 px-6">
-                                            <p className="text-slate-600 font-normal">{emp.Email}</p>
+                                            <p className="text-slate-600 font-normal">
+                                                {emp.Email}
+                                            </p>
                                             <p className="text-[11px] text-slate-400 mt-0.5">
-                                                {emp.Phone || '—'}
+                                                {emp.Phone || "—"}
                                             </p>
                                         </td>
 
                                         <td className="py-4 px-6">
-                                            {emp.Status === 'Active' ? (
+                                            {emp.Status === "Active" ? (
                                                 <span className="inline-block bg-emerald-50 text-emerald-600 border border-emerald-200 text-[10px] font-bold px-2.5 py-0.5 rounded-md">
                                                     Active
                                                 </span>
@@ -428,21 +482,27 @@ export default function EmployeeManagement() {
                                         <td className="py-4 px-6 text-right">
                                             <div className="flex items-center justify-end space-x-2 text-slate-400">
                                                 <button
-                                                    onClick={() => setBarcodeEmployee(emp)}
-                                                    className="p-1 hover:text-slate-600 transition"
+                                                    onClick={() =>
+                                                        setBarcodeEmployee(emp)
+                                                    }
+                                                    className="p-1 hover:text-slate-600 transition cursor-pointer"
                                                     title="View Barcode"
                                                 >
                                                     <Barcode className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => openEdit(emp)}
+                                                    onClick={() =>
+                                                        openEdit(emp)
+                                                    }
                                                     className="p-1 hover:text-slate-600 transition"
                                                     title="Edit Employee"
                                                 >
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => setEmployeeToDelete(emp)}
+                                                    onClick={() =>
+                                                        setEmployeeToDelete(emp)
+                                                    }
                                                     className="p-1 hover:text-rose-600 transition"
                                                     title="Delete Employee"
                                                 >
@@ -454,26 +514,34 @@ export default function EmployeeManagement() {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="6" className="py-8 text-center text-slate-400 text-xs">
-                                        No personnel found matching the filter criteria.
+                                    <td
+                                        colSpan="6"
+                                        className="py-8 text-center text-slate-400 text-xs"
+                                    >
+                                        No personnel found matching the filter
+                                        criteria.
                                     </td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
-
                 </div>
                 {filteredEmployees.length > 0 && (
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-slate-100">
                         <p className="text-[11px] text-slate-400 font-medium">
                             Showing {(currentPage - 1) * employeesPerPage + 1}–
-                            {Math.min(currentPage * employeesPerPage, filteredEmployees.length)}{' '}
+                            {Math.min(
+                                currentPage * employeesPerPage,
+                                filteredEmployees.length,
+                            )}{" "}
                             of {filteredEmployees.length}
                         </p>
 
                         <div className="flex items-center gap-1.5">
                             <button
-                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                onClick={() =>
+                                    setCurrentPage((p) => Math.max(1, p - 1))
+                                }
                                 disabled={currentPage === 1}
                                 className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
                             >
@@ -485,7 +553,11 @@ export default function EmployeeManagement() {
                             </span>
 
                             <button
-                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                onClick={() =>
+                                    setCurrentPage((p) =>
+                                        Math.min(totalPages, p + 1),
+                                    )
+                                }
                                 disabled={currentPage === totalPages}
                                 className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
                             >
@@ -513,6 +585,39 @@ export default function EmployeeManagement() {
                     onConfirm={confirmDeleteEmployee}
                     onClose={() => setEmployeeToDelete(null)}
                 />
+            )}
+            {/* PHOTO VIEWER */}
+            {viewingPhotoEmployee && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+                    onClick={() => setViewingPhotoEmployee(null)}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-xl max-w-sm w-full p-5 relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setViewingPhotoEmployee(null)}
+                            className="absolute top-3 right-3 text-slate-400 hover:text-slate-700 transition-colors"
+                            title="Close"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+
+                        <img
+                            src={avatarFor(viewingPhotoEmployee)}
+                            alt={viewingPhotoEmployee.FullName}
+                            className="w-full aspect-square rounded-lg object-cover bg-slate-100 mb-4"
+                        />
+
+                        <p className="text-sm font-bold text-slate-800 text-center">
+                            {viewingPhotoEmployee.FullName}
+                        </p>
+                        <p className="text-xs text-slate-400 text-center font-medium mt-0.5">
+                            {viewingPhotoEmployee.EmployeeNo}
+                        </p>
+                    </div>
+                </div>
             )}
         </div>
     );

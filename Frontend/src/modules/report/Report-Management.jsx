@@ -2,12 +2,20 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { Search, Download, Filter } from "lucide-react";
-import { getPersonLogs } from "../../api/person-log-api";
+
+import { getPersonLogs, exportPersonLogs } from "../../api/person-log-api";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+
 import { getCourses } from "../../api/course-api";
 import { getSchoolYears } from "../../api/school-year-api";
 import { getSections } from "../../api/section-api";
 import { formatLogDateTime } from "../../utils/global-helper";
 import { exportLogsToExcel } from "../../utils/csv-export";
+
+import {
+    departmentsApi,
+    positionsApi,
+} from "../../api/academic-management-api";
 
 // Flattens a log's student/employee into one shape the table can use
 const getPerson = (log) => {
@@ -22,6 +30,8 @@ const getPerson = (log) => {
             subgroup: s.section?.SectionName,
             schoolYear: s.schoolYear?.SchoolYearName,
             year: s.YearLevel,
+            department: null,
+            position: null,
         };
     }
     if (log.employee) {
@@ -35,6 +45,8 @@ const getPerson = (log) => {
             subgroup: e.position?.PositionTitle,
             schoolYear: null,
             year: null,
+            department: e.department?.DepartmentName,
+            position: e.position?.PositionTitle,
         };
     }
     return {
@@ -46,6 +58,8 @@ const getPerson = (log) => {
         subgroup: null,
         schoolYear: null,
         year: null,
+        department: null,
+        position: null,
     };
 };
 
@@ -53,60 +67,49 @@ const selectCls =
     "w-full lg:shrink-0 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
 
 export default function ReportManagement() {
-    const [logs, setLogs] = useState([]);
     const [courses, setCourses] = useState([]);
     const [schoolYears, setSchoolYears] = useState([]);
     const [sections, setSections] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
 
     const todayString = new Date().toISOString().split("T")[0];
     const [fromDate, setFromDate] = useState(todayString);
     const [toDate, setToDate] = useState(todayString);
 
-    const [searchQuery, setSearchQuery] = useState("");
-    const [selectedPersonType, setSelectedPersonType] = useState("All");
-    const [selectedCourse, setSelectedCourse] = useState("All");
-    const [selectedSection, setSelectedSection] = useState("All");
-    const [selectedType, setSelectedType] = useState("All");
-    const [selectedSchoolYear, setSelectedSchoolYear] = useState("All");
+    // "" means "All" for every dropdown. Course/section/etc. hold IDs.
+    const [searchInput, setSearchInput] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [selectedPersonType, setSelectedPersonType] = useState("");
+    const [selectedType, setSelectedType] = useState("");
+    const [selectedCourse, setSelectedCourse] = useState("");
+    const [selectedSection, setSelectedSection] = useState("");
+    const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
+    const [selectedDepartment, setSelectedDepartment] = useState("");
+    const [selectedPosition, setSelectedPosition] = useState("");
+
     const [currentPage, setCurrentPage] = useState(1);
     const logsPerPage = 15;
+
+    const { data: departments = [] } = useQuery({
+        queryKey: departmentsApi.key,
+        queryFn: departmentsApi.list,
+    });
+    const { data: positions = [] } = useQuery({
+        queryKey: positionsApi.key,
+        queryFn: positionsApi.list,
+    });
 
     useEffect(() => {
         loadFilters();
     }, []);
 
+    // Wait until the user stops typing before hitting the server
     useEffect(() => {
-        loadLogs();
-    }, [fromDate, toDate]);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [
-        searchQuery,
-        selectedPersonType,
-        selectedCourse,
-        selectedSection,
-        selectedType,
-        selectedSchoolYear,
-        fromDate,
-        toDate,
-    ]);
-
-    const loadLogs = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await getPersonLogs(fromDate, toDate);
-            setLogs(res.data);
-        } catch (err) {
-            setError("Failed to load logs. Is the backend running?");
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    };
+        const t = setTimeout(() => {
+            setDebouncedSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 400);
+        return () => clearTimeout(t);
+    }, [searchInput]);
 
     const loadFilters = async () => {
         try {
@@ -121,90 +124,97 @@ export default function ReportManagement() {
         }
     };
 
+    // Filters sent to the backend (undefined values are not sent)
+    const filterParams = {
+        from: fromDate,
+        to: toDate,
+        search: debouncedSearch || undefined,
+        person_type: selectedPersonType || undefined,
+        log_type: selectedType || undefined,
+        course_id: selectedCourse || undefined,
+        section_id: selectedSection || undefined,
+        school_year_id: selectedSchoolYear || undefined,
+        department_id: selectedDepartment || undefined,
+        position_id: selectedPosition || undefined,
+    };
+
+    const params = {
+        ...filterParams,
+        page: currentPage,
+        per_page: logsPerPage,
+    };
+
+    const {
+        data,
+        isLoading: loading,
+        isFetching,
+        error: queryError,
+    } = useQuery({
+        queryKey: ["person-logs", params],
+        queryFn: async () => (await getPersonLogs(params)).data,
+        placeholderData: keepPreviousData, // keeps the old page visible while the next loads
+        staleTime: 0, // logs are live, always refetch
+    });
+
+    const error = queryError
+        ? queryError.response?.data?.message ||
+          "Failed to load logs. Is the backend running?"
+        : null;
+
+    // Attach the flattened person to this page's rows
+    const personLogs = useMemo(
+        () =>
+            (data?.data ?? []).map((log) => ({
+                ...log,
+                person: getPerson(log),
+            })),
+        [data],
+    );
+    const paginatedLogs = personLogs;
+
+    const totalRecords = data?.total ?? 0;
+    const totalPages = Math.max(1, data?.last_page ?? 1);
+    const totalTimeIn = data?.stats?.time_in ?? 0;
+    const totalTimeOut = data?.stats?.time_out ?? 0;
+
+    // Sets a filter and goes back to page 1 in the same render (one request)
+    const pick = (setter) => (e) => {
+        setter(e.target.value);
+        setCurrentPage(1);
+    };
+
     const handlePersonTypeChange = (value) => {
         setSelectedPersonType(value);
-        // Course / section / school year only apply to students
-        if (value === "Employee") {
-            setSelectedCourse("All");
-            setSelectedSection("All");
-            setSelectedSchoolYear("All");
+        setCurrentPage(1);
+
+        // Student-only filters reset unless "Student" is chosen
+        if (value !== "Student") {
+            setSelectedCourse("");
+            setSelectedSection("");
+            setSelectedSchoolYear("");
+        }
+
+        // Employee-only filters reset unless "Employee" is chosen
+        if (value !== "Employee") {
+            setSelectedDepartment("");
+            setSelectedPosition("");
         }
     };
 
-    // Attach the flattened person once per load
-    const personLogs = useMemo(
-        () => logs.map((log) => ({ ...log, person: getPerson(log) })),
-        [logs],
-    );
-
-    // Filtered dataset
-    const filteredLogs = useMemo(() => {
-        const q = searchQuery.toLowerCase();
-
-        return personLogs.filter((log) => {
-            const p = log.person;
-
-            const matchesSearch =
-                p.name.toLowerCase().includes(q) ||
-                String(p.number ?? "").toLowerCase().includes(q) ||
-                String(log.LogID).includes(searchQuery);
-
-            const matchesPerson =
-                selectedPersonType === "All" || p.type === selectedPersonType;
-            const matchesCourse =
-                selectedCourse === "All" || p.group === selectedCourse;
-            const matchesSection =
-                selectedSection === "All" || p.subgroup === selectedSection;
-            const matchesType =
-                selectedType === "All" || log.LogType === selectedType;
-            const matchesSchoolYear =
-                selectedSchoolYear === "All" ||
-                p.schoolYear === selectedSchoolYear;
-
-            return (
-                matchesSearch &&
-                matchesPerson &&
-                matchesCourse &&
-                matchesSection &&
-                matchesType &&
-                matchesSchoolYear
-            );
-        });
-    }, [
-        personLogs,
-        searchQuery,
-        selectedPersonType,
-        selectedCourse,
-        selectedSection,
-        selectedType,
-        selectedSchoolYear,
-    ]);
-
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredLogs.length / logsPerPage),
-    );
-
-    const paginatedLogs = useMemo(() => {
-        const start = (currentPage - 1) * logsPerPage;
-        return filteredLogs.slice(start, start + logsPerPage);
-    }, [filteredLogs, currentPage]);
-
-    // Statistics
-    const totalRecords = filteredLogs.length;
-    const totalTimeIn = filteredLogs.filter(
-        (log) => log.LogType === "TIME IN",
-    ).length;
-    const totalTimeOut = filteredLogs.filter(
-        (log) => log.LogType === "TIME OUT",
-    ).length;
-
-    // Export to Excel Function
+    // Export: asks the backend for ALL rows matching the current filters
     const handleExportCSV = async () => {
-        await exportLogsToExcel(filteredLogs, fromDate, toDate);
+        const { data: rows } = await exportPersonLogs(filterParams);
+        await exportLogsToExcel(
+            rows.map((log) => ({ ...log, person: getPerson(log) })),
+            fromDate,
+            toDate,
+        );
     };
 
-    const studentFiltersDisabled = selectedPersonType === "Employee";
+    // Student filters work only when "Students" is chosen,
+    // employee filters only when "Employees" is chosen
+    const studentFiltersDisabled = selectedPersonType !== "Student";
+    const employeeFiltersDisabled = selectedPersonType !== "Employee";
 
     return (
         <div className="p-6 bg-slate-50 min-h-screen text-slate-800 font-sans space-y-6">
@@ -262,7 +272,7 @@ export default function ReportManagement() {
                             <input
                                 type="date"
                                 value={fromDate}
-                                onChange={(e) => setFromDate(e.target.value)}
+                                onChange={pick(setFromDate)}
                                 className="w-full lg:w-28 bg-transparent border-none text-slate-700 font-medium focus:outline-none cursor-pointer"
                             />
                         </div>
@@ -273,7 +283,7 @@ export default function ReportManagement() {
                             <input
                                 type="date"
                                 value={toDate}
-                                onChange={(e) => setToDate(e.target.value)}
+                                onChange={pick(setToDate)}
                                 className="w-full lg:w-28 bg-transparent border-none text-slate-700 font-medium focus:outline-none cursor-pointer"
                             />
                         </div>
@@ -284,11 +294,22 @@ export default function ReportManagement() {
                             <input
                                 type="text"
                                 placeholder="Search name or ID..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
                                 className="w-full lg:w-40 pl-8 sm:pl-9 pr-3 py-1 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
+
+                        {/* Log Type Dropdown */}
+                        <select
+                            value={selectedType}
+                            onChange={pick(setSelectedType)}
+                            className={`${selectCls} lg:w-28`}
+                        >
+                            <option value="">All Types</option>
+                            <option value="TIME IN">TIME IN</option>
+                            <option value="TIME OUT">TIME OUT</option>
+                        </select>
 
                         {/* Person Dropdown */}
                         <select
@@ -298,21 +319,54 @@ export default function ReportManagement() {
                             }
                             className={`${selectCls} lg:w-28`}
                         >
-                            <option value="All">All People</option>
+                            <option value="">All People</option>
                             <option value="Student">Students</option>
                             <option value="Employee">Employees</option>
+                        </select>
+
+                        {/* Department Dropdown (employees only) */}
+                        <select
+                            value={selectedDepartment}
+                            onChange={pick(setSelectedDepartment)}
+                            disabled={employeeFiltersDisabled}
+                            className={`${selectCls} lg:w-32`}
+                        >
+                            <option value="">All Departments</option>
+                            {departments.map((d) => (
+                                <option
+                                    key={d.DepartmentID}
+                                    value={d.DepartmentID}
+                                >
+                                    {d.DepartmentName}
+                                </option>
+                            ))}
+                        </select>
+
+                        {/* Position Dropdown (employees only) */}
+                        <select
+                            value={selectedPosition}
+                            onChange={pick(setSelectedPosition)}
+                            disabled={employeeFiltersDisabled}
+                            className={`${selectCls} lg:w-28`}
+                        >
+                            <option value="">All Positions</option>
+                            {positions.map((p) => (
+                                <option key={p.PositionID} value={p.PositionID}>
+                                    {p.PositionTitle}
+                                </option>
+                            ))}
                         </select>
 
                         {/* Course Dropdown (students only) */}
                         <select
                             value={selectedCourse}
-                            onChange={(e) => setSelectedCourse(e.target.value)}
+                            onChange={pick(setSelectedCourse)}
                             disabled={studentFiltersDisabled}
                             className={`${selectCls} lg:w-28`}
                         >
-                            <option value="All">All Courses</option>
+                            <option value="">All Courses</option>
                             {courses.map((c) => (
-                                <option key={c.CourseID} value={c.CourseName}>
+                                <option key={c.CourseID} value={c.CourseID}>
                                     {c.CourseCode}
                                 </option>
                             ))}
@@ -321,17 +375,15 @@ export default function ReportManagement() {
                         {/* School Year Dropdown (students only) */}
                         <select
                             value={selectedSchoolYear}
-                            onChange={(e) =>
-                                setSelectedSchoolYear(e.target.value)
-                            }
+                            onChange={pick(setSelectedSchoolYear)}
                             disabled={studentFiltersDisabled}
                             className={`${selectCls} lg:w-32`}
                         >
-                            <option value="All">All School Years</option>
+                            <option value="">All School Years</option>
                             {schoolYears.map((sy) => (
                                 <option
                                     key={sy.SchoolYearID}
-                                    value={sy.SchoolYearName}
+                                    value={sy.SchoolYearID}
                                 >
                                     {sy.SchoolYearName}
                                 </option>
@@ -341,27 +393,16 @@ export default function ReportManagement() {
                         {/* Section Dropdown (students only) */}
                         <select
                             value={selectedSection}
-                            onChange={(e) => setSelectedSection(e.target.value)}
+                            onChange={pick(setSelectedSection)}
                             disabled={studentFiltersDisabled}
                             className={`${selectCls} lg:w-28`}
                         >
-                            <option value="All">All Sections</option>
+                            <option value="">All Sections</option>
                             {sections.map((s) => (
-                                <option key={s.SectionID} value={s.SectionName}>
+                                <option key={s.SectionID} value={s.SectionID}>
                                     {s.SectionName}
                                 </option>
                             ))}
-                        </select>
-
-                        {/* Log Type Dropdown */}
-                        <select
-                            value={selectedType}
-                            onChange={(e) => setSelectedType(e.target.value)}
-                            className={`${selectCls} lg:w-28`}
-                        >
-                            <option value="All">All Types</option>
-                            <option value="TIME IN">TIME IN</option>
-                            <option value="TIME OUT">TIME OUT</option>
                         </select>
                     </div>
 
@@ -384,7 +425,9 @@ export default function ReportManagement() {
 
             {/* LOGS TABLE */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-                <div className="overflow-x-auto">
+                <div
+                    className={`overflow-x-auto transition-opacity ${isFetching ? "opacity-60" : ""}`}
+                >
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -392,7 +435,9 @@ export default function ReportManagement() {
                                 <th className="py-3 px-4">NAME</th>
                                 <th className="py-3 px-4">PERSON</th>
                                 <th className="py-3 px-4">COURSE / DEPT</th>
-                                <th className="py-3 px-4">SECTION / POSITION</th>
+                                <th className="py-3 px-4">
+                                    SECTION / POSITION
+                                </th>
                                 <th className="py-3 px-4">SCHOOL YEAR</th>
                                 <th className="py-3 px-4">YEAR</th>
                                 <th className="py-3 px-4">TYPE</th>
@@ -478,7 +523,9 @@ export default function ReportManagement() {
                                             </td>
 
                                             <td className="py-3 px-4 font-medium text-slate-500 whitespace-nowrap">
-                                                {formatLogDateTime(log.ScannedAt)}
+                                                {formatLogDateTime(
+                                                    log.ScannedAt,
+                                                )}
                                             </td>
                                         </tr>
                                     );
@@ -502,15 +549,11 @@ export default function ReportManagement() {
                 <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
                     <span>
                         Showing{" "}
-                        {filteredLogs.length === 0
+                        {totalRecords === 0
                             ? 0
                             : (currentPage - 1) * logsPerPage + 1}
-                        -
-                        {Math.min(
-                            currentPage * logsPerPage,
-                            filteredLogs.length,
-                        )}{" "}
-                        of {filteredLogs.length} records
+                        -{Math.min(currentPage * logsPerPage, totalRecords)} of{" "}
+                        {totalRecords} records
                     </span>
                     <div className="flex items-center space-x-2">
                         <button

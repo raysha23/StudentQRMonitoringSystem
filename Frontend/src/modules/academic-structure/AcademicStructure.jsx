@@ -1,7 +1,8 @@
 // File Path: Frontend\src\modules\academic-structure\academicStructure.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X } from 'lucide-react';
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Search, Plus, Edit2, Trash2, X } from "lucide-react";
 import {
     programsApi,
     departmentsApi,
@@ -9,28 +10,50 @@ import {
     subjectsApi,
     sectionsApi,
     getErrorMessage,
-} from '../../api/academic-management-api';
+} from "../../api/academic-management-api";
 
-const TABS = ['Programs', 'Departments', 'Positions', 'Courses', 'Sections'];
+const TABS = ["Programs", "Departments", "Positions", "Courses", "Sections"];
 
 const YEAR_LEVELS = [
-    { value: 1, label: '1st Year' },
-    { value: 2, label: '2nd Year' },
-    { value: 3, label: '3rd Year' },
-    { value: 4, label: '4th Year' },
+    { value: 1, label: "1st Year" },
+    { value: 2, label: "2nd Year" },
+    { value: 3, label: "3rd Year" },
+    { value: 4, label: "4th Year" },
 ];
-const yearLabel = (n) => YEAR_LEVELS.find((y) => y.value === n)?.label ?? '—';
+const yearLabel = (n) => YEAR_LEVELS.find((y) => y.value === n)?.label ?? "—";
 
-const displayId = (prefix, id) => `${prefix}-${String(id).padStart(3, '0')}`;
+const displayId = (prefix, id) => `${prefix}-${String(id).padStart(3, "0")}`;
+
+// Newest first (higher auto-increment ID = newer record)
+const newestFirst = (items, idKey) =>
+    [...items].sort((a, b) => b[idKey] - a[idKey]);
 
 const inputCls =
-    'w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500';
+    "w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 const PROGRAM_FIELDS = [
-    { key: 'CourseCode', label: 'Program Code', placeholder: 'e.g. BSCS', required: true },
-    { key: 'CourseName', label: 'Program Name', placeholder: 'e.g. BS Computer Science', required: true },
-    { key: 'Description', label: 'Description / Title', placeholder: 'e.g. Bachelor of Science in Computer Science' },
-    { key: 'Majors', label: 'Majors / Specializations (comma separated)', placeholder: 'e.g. Software Engineering, Data Science' },
+    {
+        key: "CourseCode",
+        label: "Program Code",
+        placeholder: "e.g. BSCS",
+        required: true,
+    },
+    {
+        key: "CourseName",
+        label: "Program Name",
+        placeholder: "e.g. BS Computer Science",
+        required: true,
+    },
+    {
+        key: "Description",
+        label: "Description / Title",
+        placeholder: "e.g. Bachelor of Science in Computer Science",
+    },
+    {
+        key: "Majors",
+        label: "Majors / Specializations (comma separated)",
+        placeholder: "e.g. Software Engineering, Data Science",
+    },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -38,13 +61,14 @@ const PROGRAM_FIELDS = [
 /* ------------------------------------------------------------------ */
 
 function StatusBadge({ status }) {
-    const active = status === 'Active';
+    const active = status === "Active";
     return (
         <span
-            className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-md border ${active
-                ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                : 'bg-slate-100 text-slate-500 border-slate-200'
-                }`}
+            className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-md border ${
+                active
+                    ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                    : "bg-slate-100 text-slate-500 border-slate-200"
+            }`}
         >
             {status}
         </span>
@@ -67,9 +91,9 @@ const buildPayload = (fields, form, includeStatus) => {
         const v = form[f.key];
         if (f.numeric) {
             // Blank numbers are left out so the database default applies
-            if (v !== '' && v != null) payload[f.key] = Number(v);
+            if (v !== "" && v != null) payload[f.key] = Number(v);
         } else {
-            payload[f.key] = typeof v === 'string' ? v.trim() : v;
+            payload[f.key] = typeof v === "string" ? v.trim() : v;
         }
     });
     if (includeStatus) payload.Status = form.Status;
@@ -79,17 +103,32 @@ const buildPayload = (fields, form, includeStatus) => {
 // Starting values for a new record
 const emptyForm = (fields) =>
     Object.fromEntries(
-        fields.map((f) => [f.key, f.options?.length ? f.options[0].value : ''])
+        fields.map((f) => [f.key, f.options?.length ? f.options[0].value : ""]),
     );
 
 /* Shared add / edit modal */
-function EntityModal({ title, fields, form, setForm, showStatus, saving, error, onSubmit, onClose }) {
+function EntityModal({
+    title,
+    fields,
+    form,
+    setForm,
+    showStatus,
+    saving,
+    error,
+    onSubmit,
+    onClose,
+}) {
     return (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                    <h3 className="text-base font-bold text-slate-800">{title}</h3>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition">
+                    <h3 className="text-base font-bold text-slate-800">
+                        {title}
+                    </h3>
+                    <button
+                        onClick={onClose}
+                        className="text-slate-400 hover:text-slate-600 transition"
+                    >
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -99,16 +138,25 @@ function EntityModal({ title, fields, form, setForm, showStatus, saving, error, 
                 <form onSubmit={onSubmit} className="space-y-4 text-xs">
                     {fields.map((f) => (
                         <div key={f.key}>
-                            <label className="block text-slate-600 font-semibold mb-1">{f.label}</label>
+                            <label className="block text-slate-600 font-semibold mb-1">
+                                {f.label}
+                            </label>
                             {f.options ? (
                                 <select
                                     required={f.required}
-                                    value={form[f.key] ?? ''}
-                                    onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                                    value={form[f.key] ?? ""}
+                                    onChange={(e) =>
+                                        setForm({
+                                            ...form,
+                                            [f.key]: e.target.value,
+                                        })
+                                    }
                                     className={inputCls}
                                 >
                                     {f.options.length === 0 && (
-                                        <option value="">No options available yet</option>
+                                        <option value="">
+                                            No options available yet
+                                        </option>
                                     )}
                                     {f.options.map((o) => (
                                         <option key={o.value} value={o.value}>
@@ -118,13 +166,18 @@ function EntityModal({ title, fields, form, setForm, showStatus, saving, error, 
                                 </select>
                             ) : (
                                 <input
-                                    type={f.numeric ? 'number' : 'text'}
+                                    type={f.numeric ? "number" : "text"}
                                     min={f.numeric ? 0 : undefined}
                                     max={f.max}
                                     placeholder={f.placeholder}
                                     required={f.required}
-                                    value={form[f.key] ?? ''}
-                                    onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                                    value={form[f.key] ?? ""}
+                                    onChange={(e) =>
+                                        setForm({
+                                            ...form,
+                                            [f.key]: e.target.value,
+                                        })
+                                    }
                                     className={inputCls}
                                 />
                             )}
@@ -133,10 +186,14 @@ function EntityModal({ title, fields, form, setForm, showStatus, saving, error, 
 
                     {showStatus && (
                         <div>
-                            <label className="block text-slate-600 font-semibold mb-1">Status</label>
+                            <label className="block text-slate-600 font-semibold mb-1">
+                                Status
+                            </label>
                             <select
-                                value={form.Status ?? 'Active'}
-                                onChange={(e) => setForm({ ...form, Status: e.target.value })}
+                                value={form.Status ?? "Active"}
+                                onChange={(e) =>
+                                    setForm({ ...form, Status: e.target.value })
+                                }
                                 className={inputCls}
                             >
                                 <option value="Active">Active</option>
@@ -158,7 +215,7 @@ function EntityModal({ title, fields, form, setForm, showStatus, saving, error, 
                             disabled={saving}
                             className="px-4 py-2 font-bold bg-[#1a365d] hover:bg-[#122744] text-white rounded-xl transition shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                            {saving ? 'Saving...' : 'Save'}
+                            {saving ? "Saving..." : "Save"}
                         </button>
                     </div>
                 </form>
@@ -171,47 +228,61 @@ function EntityModal({ title, fields, form, setForm, showStatus, saving, error, 
 /* Reusable CRUD table (Departments, Positions, Courses, Sections)    */
 /* ------------------------------------------------------------------ */
 
-function EntityManager({ title, subtitle, singular, idKey, idPrefix, api, columns, fields, onChanged }) {
-    const [items, setItems] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [search, setSearch] = useState('');
+function EntityManager({
+    title,
+    subtitle,
+    singular,
+    idKey,
+    idPrefix,
+    api,
+    columns,
+    fields,
+    onChanged,
+}) {
+    const queryClient = useQueryClient();
+    const [search, setSearch] = useState("");
+    const [actionError, setActionError] = useState(null); // delete errors
 
     const [modal, setModal] = useState(null); // null | { mode: 'add' } | { mode: 'edit', item }
     const [form, setForm] = useState({});
     const [formError, setFormError] = useState(null);
     const [saving, setSaving] = useState(false);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            setItems(await api.list());
-        } catch (err) {
-            setError(getErrorMessage(err, `Failed to load ${singular.toLowerCase()}s.`));
-        } finally {
-            setLoading(false);
-        }
-    }, [api, singular]);
+    const {
+        data: items = [],
+        isLoading: loading,
+        error: loadError,
+    } = useQuery({ queryKey: api.key, queryFn: api.list });
 
-    useEffect(() => {
-        load();
-    }, [load]);
+    const error =
+        actionError ||
+        (loadError
+            ? getErrorMessage(
+                  loadError,
+                  `Failed to load ${singular.toLowerCase()}s.`,
+              )
+            : null);
+
+    const reload = () => queryClient.invalidateQueries({ queryKey: api.key });
 
     const q = search.toLowerCase();
-    const filtered = items.filter((item) => JSON.stringify(item).toLowerCase().includes(q));
 
+    const filtered = newestFirst(items, idKey).filter((item) =>
+        JSON.stringify(item).toLowerCase().includes(q),
+    );
     const openAdd = () => {
         setForm(emptyForm(fields));
         setFormError(null);
-        setModal({ mode: 'add' });
+        setModal({ mode: "add" });
     };
 
     const openEdit = (item) => {
-        const values = Object.fromEntries(fields.map((f) => [f.key, item[f.key] ?? '']));
+        const values = Object.fromEntries(
+            fields.map((f) => [f.key, item[f.key] ?? ""]),
+        );
         setForm({ ...values, Status: item.Status });
         setFormError(null);
-        setModal({ mode: 'edit', item });
+        setModal({ mode: "edit", item });
     };
 
     const closeModal = () => setModal(null);
@@ -221,17 +292,17 @@ function EntityManager({ title, subtitle, singular, idKey, idPrefix, api, column
         setSaving(true);
         setFormError(null);
         try {
-            const payload = buildPayload(fields, form, modal.mode === 'edit');
-            if (modal.mode === 'edit') {
+            const payload = buildPayload(fields, form, modal.mode === "edit");
+            if (modal.mode === "edit") {
                 await api.update(modal.item[idKey], payload);
             } else {
                 await api.create(payload);
             }
             closeModal();
-            await load();
+            await reload();
             onChanged?.();
         } catch (err) {
-            setFormError(getErrorMessage(err, 'Failed to save.'));
+            setFormError(getErrorMessage(err, "Failed to save."));
         } finally {
             setSaving(false);
         }
@@ -241,10 +312,11 @@ function EntityManager({ title, subtitle, singular, idKey, idPrefix, api, column
         if (!window.confirm(`Delete this ${singular.toLowerCase()}?`)) return;
         try {
             await api.remove(item[idKey]);
-            await load();
+            setActionError(null);
+            await reload();
             onChanged?.();
         } catch (err) {
-            setError(getErrorMessage(err, 'Failed to delete.'));
+            setActionError(getErrorMessage(err, "Failed to delete."));
         }
     };
 
@@ -252,7 +324,9 @@ function EntityManager({ title, subtitle, singular, idKey, idPrefix, api, column
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                    <h3 className="text-base font-extrabold text-slate-800 tracking-tight">{title}</h3>
+                    <h3 className="text-base font-extrabold text-slate-800 tracking-tight">
+                        {title}
+                    </h3>
                     <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
                 </div>
                 <div className="flex items-center space-x-3">
@@ -284,7 +358,9 @@ function EntityManager({ title, subtitle, singular, idKey, idPrefix, api, column
                         <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                             <th className="py-3.5 px-6">ID</th>
                             {columns.map((c) => (
-                                <th key={c.label} className="py-3.5 px-6">{c.label}</th>
+                                <th key={c.label} className="py-3.5 px-6">
+                                    {c.label}
+                                </th>
                             ))}
                             <th className="py-3.5 px-6">Status</th>
                             <th className="py-3.5 px-6 text-right">Actions</th>
@@ -293,19 +369,30 @@ function EntityManager({ title, subtitle, singular, idKey, idPrefix, api, column
                     <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                         {loading ? (
                             <tr>
-                                <td colSpan={columns.length + 3} className="py-8 text-center text-slate-400 text-xs">
+                                <td
+                                    colSpan={columns.length + 3}
+                                    className="py-8 text-center text-slate-400 text-xs"
+                                >
                                     Loading...
                                 </td>
                             </tr>
                         ) : filtered.length > 0 ? (
                             filtered.map((item) => (
-                                <tr key={item[idKey]} className="hover:bg-slate-50/80 transition">
+                                <tr
+                                    key={item[idKey]}
+                                    className="hover:bg-slate-50/80 transition"
+                                >
                                     <td className="py-4 px-6 font-mono text-[11px] text-slate-400">
                                         {displayId(idPrefix, item[idKey])}
                                     </td>
                                     {columns.map((c) => (
-                                        <td key={c.label} className="py-4 px-6 font-medium">
-                                            {c.render ? c.render(item) : item[c.key] ?? '—'}
+                                        <td
+                                            key={c.label}
+                                            className="py-4 px-6 font-medium"
+                                        >
+                                            {c.render
+                                                ? c.render(item)
+                                                : (item[c.key] ?? "—")}
                                         </td>
                                     ))}
                                     <td className="py-4 px-6">
@@ -321,7 +408,9 @@ function EntityManager({ title, subtitle, singular, idKey, idPrefix, api, column
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
                                             <button
-                                                onClick={() => handleDelete(item)}
+                                                onClick={() =>
+                                                    handleDelete(item)
+                                                }
                                                 className="p-1 hover:text-rose-600 transition"
                                                 title={`Delete ${singular}`}
                                             >
@@ -333,7 +422,10 @@ function EntityManager({ title, subtitle, singular, idKey, idPrefix, api, column
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={columns.length + 3} className="py-8 text-center text-slate-400 text-xs">
+                                <td
+                                    colSpan={columns.length + 3}
+                                    className="py-8 text-center text-slate-400 text-xs"
+                                >
                                     No {singular.toLowerCase()}s found.
                                 </td>
                             </tr>
@@ -344,11 +436,11 @@ function EntityManager({ title, subtitle, singular, idKey, idPrefix, api, column
 
             {modal && (
                 <EntityModal
-                    title={`${modal.mode === 'edit' ? 'Edit' : 'Add New'} ${singular}`}
+                    title={`${modal.mode === "edit" ? "Edit" : "Add New"} ${singular}`}
                     fields={fields}
                     form={form}
                     setForm={setForm}
-                    showStatus={modal.mode === 'edit'}
+                    showStatus={modal.mode === "edit"}
                     saving={saving}
                     error={formError}
                     onSubmit={handleSubmit}
@@ -364,64 +456,77 @@ function EntityManager({ title, subtitle, singular, idKey, idPrefix, api, column
 /* ------------------------------------------------------------------ */
 
 export default function AcademicStructure() {
-    const [activeTab, setActiveTab] = useState('Programs');
-    const [searchQuery, setSearchQuery] = useState('');
-
-    // Programs (courses table)
-    const [programs, setPrograms] = useState([]);
-    const [programsLoading, setProgramsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [activeTab, setActiveTab] = useState("Programs");
+    const [searchQuery, setSearchQuery] = useState("");
 
     const [modal, setModal] = useState(null); // null | { mode: 'add' } | { mode: 'edit', item }
     const [form, setForm] = useState({});
     const [formError, setFormError] = useState(null);
     const [saving, setSaving] = useState(false);
 
-    const loadPrograms = useCallback(async () => {
-        setError(null);
-        try {
-            setPrograms(await programsApi.list());
-        } catch (err) {
-            setError(getErrorMessage(err, 'Failed to load programs.'));
-        } finally {
-            setProgramsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        loadPrograms();
-    }, [loadPrograms]);
-
     const q = searchQuery.toLowerCase();
-    const filteredPrograms = programs.filter(
+    const queryClient = useQueryClient();
+    const [actionError, setActionError] = useState(null);
+
+    const {
+        data: programs = [],
+        isLoading: programsLoading,
+        error: programsError,
+    } = useQuery({ queryKey: programsApi.key, queryFn: programsApi.list });
+
+    const error =
+        actionError ||
+        (programsError
+            ? getErrorMessage(programsError, "Failed to load programs.")
+            : null);
+
+    // Only the programs list (used when sections or courses change the counts)
+    const refreshProgramList = () =>
+        queryClient.invalidateQueries({ queryKey: programsApi.key });
+
+    // A program itself changed, so refresh everything that shows program info
+    const refreshPrograms = () =>
+        Promise.all([
+            queryClient.invalidateQueries({ queryKey: programsApi.key }),
+            queryClient.invalidateQueries({ queryKey: subjectsApi.key }),
+            queryClient.invalidateQueries({ queryKey: sectionsApi.key }),
+        ]);
+
+    const filteredPrograms = newestFirst(programs, "CourseID").filter(
         (p) =>
             p.CourseName.toLowerCase().includes(q) ||
             p.CourseCode.toLowerCase().includes(q) ||
-            (p.Description ?? '').toLowerCase().includes(q)
+            (p.Description ?? "").toLowerCase().includes(q),
     );
 
-    const activeCount = programs.filter((p) => p.Status === 'Active').length;
-    const totalSections = programs.reduce((acc, p) => acc + (p.sections_count ?? 0), 0);
+    const activeCount = programs.filter((p) => p.Status === "Active").length;
+    const totalSections = programs.reduce(
+        (acc, p) => acc + (p.sections_count ?? 0),
+        0,
+    );
 
     // Dropdown options for Courses and Sections tabs
-    const programOptions = programs.map((p) => ({ value: p.CourseID, label: p.CourseCode }));
+    const programOptions = programs.map((p) => ({
+        value: p.CourseID,
+        label: p.CourseCode,
+    }));
 
     const openAddProgram = () => {
         setForm(emptyForm(PROGRAM_FIELDS));
         setFormError(null);
-        setModal({ mode: 'add' });
+        setModal({ mode: "add" });
     };
 
     const openEditProgram = (program) => {
         setForm({
             CourseCode: program.CourseCode,
             CourseName: program.CourseName,
-            Description: program.Description ?? '',
-            Majors: (program.Majors ?? []).join(', '),
+            Description: program.Description ?? "",
+            Majors: (program.Majors ?? []).join(", "),
             Status: program.Status,
         });
         setFormError(null);
-        setModal({ mode: 'edit', item: program });
+        setModal({ mode: "edit", item: program });
     };
 
     const handleProgramSubmit = async (e) => {
@@ -429,21 +534,27 @@ export default function AcademicStructure() {
         setSaving(true);
         setFormError(null);
         try {
-            const payload = buildPayload(PROGRAM_FIELDS, form, modal.mode === 'edit');
+            const payload = buildPayload(
+                PROGRAM_FIELDS,
+                form,
+                modal.mode === "edit",
+            );
             payload.CourseCode = payload.CourseCode.toUpperCase();
             payload.Majors = payload.Majors
-                ? payload.Majors.split(',').map((m) => m.trim()).filter(Boolean)
+                ? payload.Majors.split(",")
+                      .map((m) => m.trim())
+                      .filter(Boolean)
                 : [];
 
-            if (modal.mode === 'edit') {
+            if (modal.mode === "edit") {
                 await programsApi.update(modal.item.CourseID, payload);
             } else {
                 await programsApi.create(payload);
             }
             setModal(null);
-            await loadPrograms();
+            await refreshPrograms();
         } catch (err) {
-            setFormError(getErrorMessage(err, 'Failed to save program.'));
+            setFormError(getErrorMessage(err, "Failed to save program."));
         } finally {
             setSaving(false);
         }
@@ -453,19 +564,21 @@ export default function AcademicStructure() {
         if (!window.confirm(`Delete program ${program.CourseCode}?`)) return;
         try {
             await programsApi.remove(program.CourseID);
-            await loadPrograms();
+            setActionError(null);
+            await refreshPrograms();
         } catch (err) {
-            setError(getErrorMessage(err, 'Failed to delete program.'));
+            setActionError(getErrorMessage(err, "Failed to delete program."));
         }
     };
 
     return (
         <div className="bg-slate-50 min-h-screen p-6 font-sans text-slate-800 space-y-6">
-
             {/* HEADER BAR */}
             <div className="flex items-center justify-between pb-2">
                 <div>
-                    <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Academic Structure</h1>
+                    <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                        Academic Structure
+                    </h1>
                     <p className="text-xs text-slate-400 font-medium mt-0.5">
                         Oct 7, 2026 · School Administration
                     </p>
@@ -478,31 +591,45 @@ export default function AcademicStructure() {
                     <span className="text-[11px] font-extrabold tracking-widest text-blue-300 uppercase">
                         ACADEMIC CONFIGURATION
                     </span>
-                    <h2 className="text-2xl font-black tracking-tight text-white">Programs & sections</h2>
+                    <h2 className="text-2xl font-black tracking-tight text-white">
+                        Programs & sections
+                    </h2>
                     <p className="text-xs text-slate-300 font-normal leading-relaxed">
-                        Maintain the school's official program catalog, specializations, class sections, and assigned advisers.
+                        Maintain the school's official program catalog,
+                        specializations, class sections, and assigned advisers.
                     </p>
                 </div>
 
                 <div className="flex items-center space-x-3 self-stretch md:self-auto">
                     <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-xl px-6 py-3 text-center flex-1 md:flex-initial min-w-[90px]">
-                        <span className="text-2xl font-extrabold block text-white">{programs.length}</span>
-                        <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">Programs</span>
+                        <span className="text-2xl font-extrabold block text-white">
+                            {programs.length}
+                        </span>
+                        <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">
+                            Programs
+                        </span>
                     </div>
                     <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-xl px-6 py-3 text-center flex-1 md:flex-initial min-w-[90px]">
-                        <span className="text-2xl font-extrabold block text-white">{activeCount}</span>
-                        <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">Active</span>
+                        <span className="text-2xl font-extrabold block text-white">
+                            {activeCount}
+                        </span>
+                        <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">
+                            Active
+                        </span>
                     </div>
                     <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-xl px-6 py-3 text-center flex-1 md:flex-initial min-w-[90px]">
-                        <span className="text-2xl font-extrabold block text-white">{totalSections}</span>
-                        <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">Sections</span>
+                        <span className="text-2xl font-extrabold block text-white">
+                            {totalSections}
+                        </span>
+                        <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">
+                            Sections
+                        </span>
                     </div>
                 </div>
             </div>
 
             {/* MAIN CONTAINER */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6">
-
                 {/* TABS & SEARCH & ADD BUTTON ROW */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
                     <div className="inline-flex bg-slate-100 p-1 rounded-xl self-start max-w-full overflow-x-auto">
@@ -510,17 +637,18 @@ export default function AcademicStructure() {
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`px-5 py-2 text-xs font-bold rounded-lg transition whitespace-nowrap ${activeTab === tab
-                                    ? 'bg-white text-slate-800 shadow-xs'
-                                    : 'text-slate-500 hover:text-slate-800'
-                                    }`}
+                                className={`px-5 py-2 text-xs font-bold rounded-lg transition whitespace-nowrap ${
+                                    activeTab === tab
+                                        ? "bg-white text-slate-800 shadow-xs"
+                                        : "text-slate-500 hover:text-slate-800"
+                                }`}
                             >
                                 {tab}
                             </button>
                         ))}
                     </div>
 
-                    {activeTab === 'Programs' && (
+                    {activeTab === "Programs" && (
                         <div className="flex items-center space-x-3 flex-1 sm:flex-initial justify-end">
                             <div className="relative flex-1 sm:w-64">
                                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -528,7 +656,9 @@ export default function AcademicStructure() {
                                     type="text"
                                     placeholder="Search programs..."
                                     value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onChange={(e) =>
+                                        setSearchQuery(e.target.value)
+                                    }
                                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400"
                                 />
                             </div>
@@ -544,14 +674,18 @@ export default function AcademicStructure() {
                 </div>
 
                 {/* PROGRAMS TAB */}
-                {activeTab === 'Programs' && (
+                {activeTab === "Programs" && (
                     <>
                         <ErrorBanner message={error} />
 
                         {programsLoading ? (
-                            <p className="py-8 text-center text-slate-400 text-xs">Loading programs...</p>
+                            <p className="py-8 text-center text-slate-400 text-xs">
+                                Loading programs...
+                            </p>
                         ) : filteredPrograms.length === 0 ? (
-                            <p className="py-8 text-center text-slate-400 text-xs">No programs found.</p>
+                            <p className="py-8 text-center text-slate-400 text-xs">
+                                No programs found.
+                            </p>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {filteredPrograms.map((program) => {
@@ -569,50 +703,79 @@ export default function AcademicStructure() {
                                                         </div>
                                                         <div>
                                                             <h3 className="text-sm font-extrabold text-slate-800 leading-tight">
-                                                                {program.CourseName}
+                                                                {
+                                                                    program.CourseName
+                                                                }
                                                             </h3>
                                                             <p className="text-[10px] font-mono text-slate-400 mt-0.5">
-                                                                {displayId('PRG', program.CourseID)}
+                                                                {displayId(
+                                                                    "PRG",
+                                                                    program.CourseID,
+                                                                )}
                                                             </p>
                                                         </div>
                                                     </div>
-                                                    <StatusBadge status={program.Status} />
+                                                    <StatusBadge
+                                                        status={program.Status}
+                                                    />
                                                 </div>
 
                                                 <h4 className="text-xs font-semibold text-slate-700 mt-4 leading-snug">
-                                                    {program.Description || program.CourseName}
+                                                    {program.Description ||
+                                                        program.CourseName}
                                                 </h4>
 
                                                 <div className="mt-4 min-h-[52px]">
                                                     {majors.length > 0 ? (
                                                         <div className="flex flex-wrap gap-1.5">
-                                                            {majors.map((major, idx) => (
-                                                                <span
-                                                                    key={idx}
-                                                                    className="bg-blue-50 text-blue-600 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-blue-100"
-                                                                >
-                                                                    {major}
-                                                                </span>
-                                                            ))}
+                                                            {majors.map(
+                                                                (
+                                                                    major,
+                                                                    idx,
+                                                                ) => (
+                                                                    <span
+                                                                        key={
+                                                                            idx
+                                                                        }
+                                                                        className="bg-blue-50 text-blue-600 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-blue-100"
+                                                                    >
+                                                                        {major}
+                                                                    </span>
+                                                                ),
+                                                            )}
                                                         </div>
                                                     ) : (
-                                                        <p className="text-xs text-slate-300 font-medium">No major required</p>
+                                                        <p className="text-xs text-slate-300 font-medium">
+                                                            No major required
+                                                        </p>
                                                     )}
                                                 </div>
                                             </div>
 
                                             <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium">
-                                                <span>{program.sections_count ?? 0} sections</span>
+                                                <span>
+                                                    {program.sections_count ??
+                                                        0}{" "}
+                                                    sections
+                                                </span>
                                                 <div className="flex items-center space-x-2 text-slate-400">
                                                     <button
-                                                        onClick={() => openEditProgram(program)}
+                                                        onClick={() =>
+                                                            openEditProgram(
+                                                                program,
+                                                            )
+                                                        }
                                                         className="p-1 hover:text-slate-600 transition"
                                                         title="Edit Program"
                                                     >
                                                         <Edit2 className="w-4 h-4" />
                                                     </button>
                                                     <button
-                                                        onClick={() => handleDeleteProgram(program)}
+                                                        onClick={() =>
+                                                            handleDeleteProgram(
+                                                                program,
+                                                            )
+                                                        }
                                                         className="p-1 hover:text-rose-600 transition"
                                                         title="Delete Program"
                                                     >
@@ -629,7 +792,7 @@ export default function AcademicStructure() {
                 )}
 
                 {/* DEPARTMENTS TAB */}
-                {activeTab === 'Departments' && (
+                {activeTab === "Departments" && (
                     <EntityManager
                         title="Department Management"
                         subtitle="Maintain school departments and their heads"
@@ -638,20 +801,34 @@ export default function AcademicStructure() {
                         idPrefix="DEP"
                         api={departmentsApi}
                         columns={[
-                            { key: 'DepartmentCode', label: 'Code' },
-                            { key: 'DepartmentName', label: 'Department' },
-                            { key: 'DepartmentHead', label: 'Head' },
+                            { key: "DepartmentCode", label: "Code" },
+                            { key: "DepartmentName", label: "Department" },
+                            { key: "DepartmentHead", label: "Head" },
                         ]}
                         fields={[
-                            { key: 'DepartmentCode', label: 'Department Code', placeholder: 'e.g. REG', required: true },
-                            { key: 'DepartmentName', label: 'Department Name', placeholder: 'e.g. Office of the Registrar', required: true },
-                            { key: 'DepartmentHead', label: 'Department Head', placeholder: 'e.g. Elena Cruz' },
+                            {
+                                key: "DepartmentCode",
+                                label: "Department Code",
+                                placeholder: "e.g. REG",
+                                required: true,
+                            },
+                            {
+                                key: "DepartmentName",
+                                label: "Department Name",
+                                placeholder: "e.g. Office of the Registrar",
+                                required: true,
+                            },
+                            {
+                                key: "DepartmentHead",
+                                label: "Department Head",
+                                placeholder: "e.g. Elena Cruz",
+                            },
                         ]}
                     />
                 )}
 
                 {/* POSITIONS TAB */}
-                {activeTab === 'Positions' && (
+                {activeTab === "Positions" && (
                     <EntityManager
                         title="Position Management"
                         subtitle="Maintain job positions available to personnel"
@@ -660,18 +837,26 @@ export default function AcademicStructure() {
                         idPrefix="POS"
                         api={positionsApi}
                         columns={[
-                            { key: 'PositionTitle', label: 'Position' },
-                            { key: 'PositionType', label: 'Type' },
+                            { key: "PositionTitle", label: "Position" },
+                            { key: "PositionType", label: "Type" },
                         ]}
                         fields={[
-                            { key: 'PositionTitle', label: 'Position Title', placeholder: 'e.g. Office Staff', required: true },
                             {
-                                key: 'PositionType',
-                                label: 'Type',
+                                key: "PositionTitle",
+                                label: "Position Title",
+                                placeholder: "e.g. Office Staff",
+                                required: true,
+                            },
+                            {
+                                key: "PositionType",
+                                label: "Type",
                                 required: true,
                                 options: [
-                                    { value: 'Teaching', label: 'Teaching' },
-                                    { value: 'Non-Teaching', label: 'Non-Teaching' },
+                                    { value: "Teaching", label: "Teaching" },
+                                    {
+                                        value: "Non-Teaching",
+                                        label: "Non-Teaching",
+                                    },
                                 ],
                             },
                         ]}
@@ -679,7 +864,7 @@ export default function AcademicStructure() {
                 )}
 
                 {/* COURSES TAB (subjects table) */}
-                {activeTab === 'Courses' && (
+                {activeTab === "Courses" && (
                     <EntityManager
                         title="Course Management"
                         subtitle="Maintain subjects offered under each program"
@@ -687,24 +872,49 @@ export default function AcademicStructure() {
                         idKey="SubjectID"
                         idPrefix="CRS"
                         api={subjectsApi}
-                        onChanged={loadPrograms}
+                        onChanged={refreshProgramList}
                         columns={[
-                            { key: 'SubjectCode', label: 'Code' },
-                            { key: 'SubjectTitle', label: 'Course Title' },
-                            { label: 'Program', render: (s) => s.course?.CourseCode ?? '—' },
-                            { key: 'Units', label: 'Units' },
+                            { key: "SubjectCode", label: "Code" },
+                            { key: "SubjectTitle", label: "Course Title" },
+                            {
+                                label: "Program",
+                                render: (s) => s.course?.CourseCode ?? "—",
+                            },
+                            { key: "Units", label: "Units" },
                         ]}
                         fields={[
-                            { key: 'SubjectCode', label: 'Course Code', placeholder: 'e.g. CS101', required: true },
-                            { key: 'SubjectTitle', label: 'Course Title', placeholder: 'e.g. Introduction to Computing', required: true },
-                            { key: 'CourseID', label: 'Program', numeric: true, required: true, options: programOptions },
-                            { key: 'Units', label: 'Units', numeric: true, max: 12, placeholder: 'e.g. 3' },
+                            {
+                                key: "SubjectCode",
+                                label: "Course Code",
+                                placeholder: "e.g. CS101",
+                                required: true,
+                            },
+                            {
+                                key: "SubjectTitle",
+                                label: "Course Title",
+                                placeholder: "e.g. Introduction to Computing",
+                                required: true,
+                            },
+                            {
+                                key: "CourseID",
+                                label: "Program",
+                                numeric: true,
+                                required: true,
+                                options: programOptions,
+                            },
+                            {
+                                key: "Units",
+                                label: "Units",
+                                numeric: true,
+                                max: 12,
+                                placeholder: "e.g. 3",
+                            },
                         ]}
                     />
                 )}
 
                 {/* SECTIONS TAB */}
-                {activeTab === 'Sections' && (
+                {activeTab === "Sections" && (
                     <EntityManager
                         title="Section Management"
                         subtitle="Maintain class sections and assigned advisers"
@@ -712,18 +922,44 @@ export default function AcademicStructure() {
                         idKey="SectionID"
                         idPrefix="SEC"
                         api={sectionsApi}
-                        onChanged={loadPrograms}
+                        onChanged={refreshProgramList}
                         columns={[
-                            { key: 'SectionName', label: 'Section' },
-                            { label: 'Program', render: (s) => s.course?.CourseCode ?? '—' },
-                            { label: 'Year Level', render: (s) => yearLabel(s.YearLevel) },
-                            { key: 'Adviser', label: 'Adviser' },
+                            { key: "SectionName", label: "Section" },
+                            {
+                                label: "Program",
+                                render: (s) => s.course?.CourseCode ?? "—",
+                            },
+                            {
+                                label: "Year Level",
+                                render: (s) => yearLabel(s.YearLevel),
+                            },
+                            { key: "Adviser", label: "Adviser" },
                         ]}
                         fields={[
-                            { key: 'SectionName', label: 'Section Name', placeholder: 'e.g. Charity', required: true },
-                            { key: 'CourseID', label: 'Program', numeric: true, required: true, options: programOptions },
-                            { key: 'YearLevel', label: 'Year Level', numeric: true, options: YEAR_LEVELS },
-                            { key: 'Adviser', label: 'Adviser', placeholder: 'e.g. Prof. Santos' },
+                            {
+                                key: "SectionName",
+                                label: "Section Name",
+                                placeholder: "e.g. Charity",
+                                required: true,
+                            },
+                            {
+                                key: "CourseID",
+                                label: "Program",
+                                numeric: true,
+                                required: true,
+                                options: programOptions,
+                            },
+                            {
+                                key: "YearLevel",
+                                label: "Year Level",
+                                numeric: true,
+                                options: YEAR_LEVELS,
+                            },
+                            {
+                                key: "Adviser",
+                                label: "Adviser",
+                                placeholder: "e.g. Prof. Santos",
+                            },
                         ]}
                     />
                 )}
@@ -732,11 +968,15 @@ export default function AcademicStructure() {
             {/* ADD / EDIT PROGRAM MODAL */}
             {modal && (
                 <EntityModal
-                    title={modal.mode === 'edit' ? 'Edit Program' : 'Add New Program'}
+                    title={
+                        modal.mode === "edit"
+                            ? "Edit Program"
+                            : "Add New Program"
+                    }
                     fields={PROGRAM_FIELDS}
                     form={form}
                     setForm={setForm}
-                    showStatus={modal.mode === 'edit'}
+                    showStatus={modal.mode === "edit"}
                     saving={saving}
                     error={formError}
                     onSubmit={handleProgramSubmit}

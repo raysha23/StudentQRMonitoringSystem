@@ -10,7 +10,7 @@ class PositionController extends Controller
 {
     public function index()
     {
-        return Position::orderBy('PositionTitle')->get();
+        return Position::orderByDesc('PositionTitle')->get();
     }
 
     public function store(Request $request)

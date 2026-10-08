@@ -10,7 +10,7 @@ class DepartmentController extends Controller
 {
     public function index()
     {
-        return Department::orderBy('DepartmentName')->get();
+        return Department::orderByDesc('DepartmentName')->get();
     }
 
     public function store(Request $request)
