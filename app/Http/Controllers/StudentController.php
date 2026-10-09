@@ -46,14 +46,12 @@ class StudentController extends Controller
             });
         }
 
-        // Summary card counts: use every filter EXCEPT status,
-        // so the cards still show the Enrolled / Not Enrolled split
         $counts = (clone $query)
             ->selectRaw('Status, COUNT(*) as aggregate')
             ->groupBy('Status')
             ->pluck('aggregate', 'Status');
 
-        $total    = (int) $counts->sum();
+        $total = (int) $counts->sum();
         $enrolled = (int) ($counts['Enrolled'] ?? 0);
 
         if ($request->filled('status')) {
@@ -66,11 +64,31 @@ class StudentController extends Controller
 
         return response()->json($paginator->toArray() + [
             'stats' => [
-                'total'    => $total,
+                'total' => $total,
                 'enrolled' => $enrolled,
                 'not_enrolled' => $total - $enrolled,
             ],
         ]);
+    }
+
+    public function counts()
+    {
+        $counts = Student::selectRaw('Status, COUNT(*) as aggregate')
+            ->groupBy('Status')
+            ->pluck('aggregate', 'Status');
+
+        return response()->json([
+            'total' => (int) Student::count(),
+            'enrolled' => (int) ($counts['Enrolled'] ?? 0),
+            'not_enrolled' => (int) ($counts['Not Enrolled'] ?? 0),
+        ]);
+    }
+
+    public function restore(Student $student)
+    {
+        $student->update(['Status' => 'Enrolled']);
+
+        return response()->json($student);
     }
 
     public function store(Request $request)
@@ -149,13 +167,9 @@ class StudentController extends Controller
 
     public function destroy(Student $student)
     {
-        if ($student->ProfilePicture) {
-            Storage::disk('public')->delete($student->ProfilePicture);
-        }
+        $student->update(['Status' => 'Not Enrolled']);
 
-        $student->delete();
-
-        return response()->json(['message' => 'Student deleted']);
+        return response()->json(['message' => 'Student moved to Not Enrolled']);
     }
     private function generateStudentNumber()
     {

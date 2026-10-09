@@ -15,17 +15,21 @@ import {
     X,
     ChevronDown,
     Barcode,
+    RotateCcw,
 } from "lucide-react";
 
 import BarCodeModal from "../../utils/general-modal/BarCodeModal";
 import StudentFormPage from "./StudentFormPage";
 
 import DeleteConfirmationModal from "../../utils/general-modal/DeleteConfirmationModal";
+import RestoreConfirmationModal from "../../utils/general-modal/RestoreConfirmationModal";
 import {
     getStudents,
+    getStudentCounts,
     createStudent,
     updateStudent,
     deleteStudent,
+    restoreStudent,
 } from "../../api/student-api";
 import {
     programsApi,
@@ -70,6 +74,7 @@ export default function StudentManagementModule() {
     const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
     const [viewingPhotoStudent, setViewingPhotoStudent] = useState(null);
     const [studentToDelete, setStudentToDelete] = useState(null);
+    const [studentToRestore, setStudentToRestore] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const studentsPerPage = 15;
 
@@ -113,16 +118,21 @@ export default function StudentManagementModule() {
     } = useQuery({
         queryKey: ["students", params],
         queryFn: async () => (await getStudents(params)).data,
-        placeholderData: keepPreviousData, // keeps the old page visible while the next loads
+        placeholderData: keepPreviousData,
+    });
+
+    const { data: studentCountsData } = useQuery({
+        queryKey: ["student-counts"],
+        queryFn: async () => (await getStudentCounts()).data,
     });
 
     const students = data?.data ?? [];
     const totalRecords = data?.total ?? 0;
     const totalPages = Math.max(1, data?.last_page ?? 1);
     const metrics = {
-        total: data?.stats?.total ?? 0,
-        active: data?.stats?.enrolled ?? 0,
-        inactive: data?.stats?.not_enrolled ?? 0,
+        total: studentCountsData?.total ?? data?.stats?.total ?? 0,
+        active: studentCountsData?.enrolled ?? data?.stats?.enrolled ?? 0,
+        inactive: studentCountsData?.not_enrolled ?? data?.stats?.not_enrolled ?? 0,
     };
 
     const error = queryError
@@ -130,8 +140,12 @@ export default function StudentManagementModule() {
           "Failed to load data. Is the backend running?"
         : null;
 
-    const refreshStudents = () =>
-        queryClient.invalidateQueries({ queryKey: ["students"] });
+    const refreshStudents = async () => {
+        await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["students"] }),
+            queryClient.invalidateQueries({ queryKey: ["student-counts"] }),
+        ]);
+    };
 
     // Sets a filter and goes back to page 1 in the same update (one request)
     const pick = (setter) => (e) => {
@@ -204,12 +218,18 @@ export default function StudentManagementModule() {
 
     const handleDeleteStudent = async () => {
         if (!studentToDelete) return;
-        await deleteStudent(studentToDelete.StudentID); // throws on failure, the modal shows it
+        await deleteStudent(studentToDelete.StudentID);
         setStudentToDelete(null);
-        // If that was the last row on the page, step back one page
         if (students.length === 1 && currentPage > 1) {
             setCurrentPage((p) => p - 1);
         }
+        await refreshStudents();
+    };
+
+    const handleRestoreStudent = async () => {
+        if (!studentToRestore) return;
+        await restoreStudent(studentToRestore.StudentID);
+        setStudentToRestore(null);
         await refreshStudents();
     };
 
@@ -418,7 +438,7 @@ export default function StudentManagementModule() {
                                         STUDENT NO.
                                     </th>
                                     <th className="py-4 px-4 min-w-[200px]">
-                                        COURSE
+                                        PROGRAM
                                     </th>
                                     <th className="py-4 px-4 min-w-[120px]">
                                         SECTION
@@ -548,17 +568,31 @@ export default function StudentManagementModule() {
                                                     >
                                                         <Edit3 className="w-4 h-4" />
                                                     </button>
-                                                    <button
-                                                        onClick={() =>
-                                                            setStudentToDelete(
-                                                                student,
-                                                            )
-                                                        }
-                                                        title="Delete Student"
-                                                        className="p-1 hover:text-rose-600 rounded transition-colors"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    {student.Status === "Enrolled" ? (
+                                                        <button
+                                                            onClick={() =>
+                                                                setStudentToDelete(
+                                                                    student,
+                                                                )
+                                                            }
+                                                            title="Mark Not Enrolled"
+                                                            className="p-1 hover:text-rose-600 rounded transition-colors"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() =>
+                                                                setStudentToRestore(
+                                                                    student,
+                                                                )
+                                                            }
+                                                            title="Restore Student"
+                                                            className="p-1 hover:text-emerald-600 rounded transition-colors"
+                                                        >
+                                                            <RotateCcw className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -632,10 +666,20 @@ export default function StudentManagementModule() {
                 )}
                 {studentToDelete && (
                     <DeleteConfirmationModal
-                        title="Delete Student"
-                        message={`Are you sure you want to delete ${studentToDelete.FirstName} ${studentToDelete.LastName}? This action cannot be undone.`}
+                        title="Mark Student as Not Enrolled"
+                        message={`Are you sure you want to set ${studentToDelete.FirstName} ${studentToDelete.LastName} to Not Enrolled? You can restore them later from the status filter.`}
+                        confirmLabel="Mark Not Enrolled"
                         onConfirm={handleDeleteStudent}
                         onClose={() => setStudentToDelete(null)}
+                    />
+                )}
+                {studentToRestore && (
+                    <RestoreConfirmationModal
+                        title="Restore Student"
+                        message={`Set ${studentToRestore.FirstName} ${studentToRestore.LastName} back to Enrolled? They will appear in the active student list again.`}
+                        confirmLabel="Restore"
+                        onConfirm={handleRestoreStudent}
+                        onClose={() => setStudentToRestore(null)}
                     />
                 )}
                 {viewingPhotoStudent && (

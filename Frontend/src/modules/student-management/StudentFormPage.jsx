@@ -59,10 +59,13 @@ export default function StudentFormPage({
         avatarSeed,
     )}`;
 
-    // Only sections that belong to the chosen course
+    // Only sections that belong to the chosen program AND the chosen year level
     const availableSections = sections.filter(
-        (s) => Number(s.CourseID) === Number(formData.CourseID),
+        (s) =>
+            Number(s.CourseID) === Number(formData.CourseID) &&
+            Number(s.YearLevel) === Number(formData.YearLevel),
     );
+
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto">
             {/* Header */}
@@ -303,70 +306,8 @@ export default function StudentFormPage({
                             />
                         </div>
 
+                        {/* ===== ACADEMIC INFO: Year Level -> Program -> Section ===== */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                                    Course
-                                </label>
-                                <select
-                                    required
-                                    value={formData.CourseID}
-                                    onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            CourseID: e.target.value,
-                                            SectionID: "", // old section may not belong to the new course
-                                        })
-                                    }
-                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
-                                >
-                                    <option value="">Select course</option>
-                                    {courses.map((c) => (
-                                        <option
-                                            key={c.CourseID}
-                                            value={c.CourseID}
-                                        >
-                                            {c.CourseCode}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                                    Section
-                                </label>
-                                <select
-                                    required
-                                    value={formData.SectionID}
-                                    onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            SectionID: e.target.value,
-                                        })
-                                    }
-                                    disabled={!formData.CourseID}
-                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <option value="">
-                                        {formData.CourseID
-                                            ? availableSections.length > 0
-                                                ? "Select section"
-                                                : "No sections for this course"
-                                            : "Select a course first"}
-                                    </option>
-                                    {availableSections.map((s) => (
-                                        <option
-                                            key={s.SectionID}
-                                            value={s.SectionID}
-                                        >
-                                            {s.SectionName}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">
                                     Year Level
@@ -377,6 +318,7 @@ export default function StudentFormPage({
                                         setFormData({
                                             ...formData,
                                             YearLevel: e.target.value,
+                                            SectionID: "", // available sections depend on year level
                                         })
                                     }
                                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
@@ -387,6 +329,74 @@ export default function StudentFormPage({
                                     <option value="4">4th Year</option>
                                 </select>
                             </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                    Program
+                                </label>
+                                <select
+                                    required
+                                    value={formData.CourseID}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            CourseID: e.target.value,
+                                            SectionID: "", // old section may not belong to the new program
+                                        })
+                                    }
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none"
+                                >
+                                    <option value="">Select program</option>
+                                    {courses.map((c) => (
+                                        <option
+                                            key={c.CourseID}
+                                            value={c.CourseID}
+                                        >
+                                            {c.CourseCode}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                Section
+                            </label>
+                            <select
+                                required
+                                value={formData.SectionID}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        SectionID: e.target.value,
+                                    })
+                                }
+                                disabled={
+                                    !formData.CourseID || !formData.YearLevel
+                                }
+                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-slate-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <option value="">
+                                    {!formData.YearLevel
+                                        ? "Select a year level first"
+                                        : !formData.CourseID
+                                          ? "Select a program first"
+                                          : availableSections.length > 0
+                                            ? "Select section"
+                                            : "No sections for this year level and program"}
+                                </option>
+                                {availableSections.map((s) => (
+                                    <option
+                                        key={s.SectionID}
+                                        value={s.SectionID}
+                                    >
+                                        {s.SectionName}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">
                                     School Year

@@ -11,12 +11,15 @@ import {
     GraduationCap,
     Barcode,
     X,
+    RotateCcw,
 } from "lucide-react";
 import {
     getEmployees,
+    getEmployeeCounts,
     createEmployee,
     updateEmployee,
     deleteEmployee,
+    restoreEmployee,
 } from "../../api/employee-api";
 import {
     positionsApi,
@@ -26,6 +29,7 @@ import {
 import BarCodeModal from "../../utils/general-modal/BarCodeModal";
 import DeleteConfirmationModal from "../../utils/general-modal/DeleteConfirmationModal";
 import EmployeeFormPage from "./EmployeeFormPage";
+import RestoreConfirmationModal from "../../utils/general-modal/RestoreConfirmationModal";
 
 const EMPTY_FORM = {
     EmployeeNo: "",
@@ -63,14 +67,23 @@ export default function EmployeeManagement() {
     const [viewingPhotoEmployee, setViewingPhotoEmployee] = useState(null);
     const queryClient = useQueryClient();
 
+    const [statusFilter, setStatusFilter] = useState("Active");
+    const [restoringId, setRestoringId] = useState(null);
+    const [employeeToRestore, setEmployeeToRestore] = useState(null);
     const {
         data: employees = [],
         isLoading: loading,
         error: queryError,
     } = useQuery({
-        queryKey: ["employees"],
-        queryFn: getEmployees,
+        queryKey: ["employees", statusFilter],
+        queryFn: () => getEmployees(statusFilter),
     });
+
+    const { data: counts } = useQuery({
+        queryKey: ["employee-counts"],
+        queryFn: getEmployeeCounts,
+    });
+
     const { data: positions = [] } = useQuery({
         queryKey: positionsApi.key,
         queryFn: positionsApi.list,
@@ -84,12 +97,22 @@ export default function EmployeeManagement() {
         ? getErrorMessage(queryError, "Failed to load personnel.")
         : null;
 
-    const refreshEmployees = () =>
-        queryClient.invalidateQueries({ queryKey: ["employees"] });
+    // Invalidates every status variant plus the counts
+    const refreshEmployees = async () => {
+        await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["employees"] }),
+            queryClient.invalidateQueries({ queryKey: ["employee-counts"] }),
+        ]);
+    };
 
+    const confirmRestoreEmployee = async () => {
+        await restoreEmployee(employeeToRestore.EmployeeID); // throws on failure, the modal shows it
+        setEmployeeToRestore(null);
+        await refreshEmployees();
+    };
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, selectedPosition]);
+    }, [searchQuery, selectedPosition, statusFilter]);
 
     // Filtered dataset
     const filteredEmployees = useMemo(() => {
@@ -122,14 +145,10 @@ export default function EmployeeManagement() {
     }, [filteredEmployees, currentPage]);
 
     // Statistics
-    const totalPersonnel = employees.length;
-    const activePersonnel = employees.filter(
-        (e) => e.Status === "Active",
-    ).length;
-    const inactivePersonnel = totalPersonnel - activePersonnel;
-    const facultyMembers = employees.filter(
-        (e) => e.position?.department?.DepartmentType === "Teaching",
-    ).length;
+    const totalPersonnel = counts?.total ?? 0;
+    const activePersonnel = counts?.active ?? 0;
+    const inactivePersonnel = counts?.inactive ?? 0;
+    const facultyMembers = counts?.faculty ?? 0;
 
     // Positions offered in the form: active ones, plus the employee's current one when editing
     const positionOptions = positions.filter(
@@ -191,7 +210,6 @@ export default function EmployeeManagement() {
         fd.append("PositionID", formData.PositionID);
         fd.append("Email", formData.Email.trim());
         fd.append("Phone", formData.Phone);
-        if (formMode === "edit") fd.append("Status", formData.Status);
 
         // Only attach a file if a new one was actually picked
         if (formData.ProfilePictureFile) {
@@ -234,6 +252,11 @@ export default function EmployeeManagement() {
         day: "numeric",
         year: "numeric",
     });
+
+    const employeeTypeLabel = (emp) =>
+        emp.position?.department?.DepartmentType === "Teaching"
+            ? "Teaching"
+            : "Non Teaching";
 
     /* ---------------- Form page view ---------------- */
 
@@ -382,7 +405,15 @@ export default function EmployeeManagement() {
                                 </option>
                             ))}
                         </select>
-
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="bg-white border-2 border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
+                        >
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                            <option value="All">All Status</option>
+                        </select>
                         <button
                             onClick={openAdd}
                             className="inline-flex items-center space-x-1.5 bg-[#1a365d] hover:bg-[#122744] text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-xs whitespace-nowrap"
@@ -407,6 +438,9 @@ export default function EmployeeManagement() {
                                 <th className="py-3.5 px-6 min-w-[180px]">
                                     DEPARTMENT
                                 </th>
+                                <th className="py-3.5 px-6 min-w-[140px]">
+                                    TYPE
+                                </th>
                                 <th className="py-3.5 px-6 min-w-[240px]">
                                     CONTACT
                                 </th>
@@ -422,7 +456,7 @@ export default function EmployeeManagement() {
                             {loading ? (
                                 <tr>
                                     <td
-                                        colSpan="6"
+                                        colSpan="7"
                                         className="py-8 text-center text-slate-400 text-xs"
                                     >
                                         Loading personnel...
@@ -476,6 +510,18 @@ export default function EmployeeManagement() {
                                         </td>
 
                                         <td className="py-4 px-6">
+                                            <span
+                                                className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-md ${
+                                                    employeeTypeLabel(emp) === "Teaching"
+                                                        ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                                        : "bg-slate-100 text-slate-600 border border-slate-200"
+                                                }`}
+                                            >
+                                                {employeeTypeLabel(emp)}
+                                            </span>
+                                        </td>
+
+                                        <td className="py-4 px-6">
                                             <p className="text-slate-600 font-normal">
                                                 {emp.Email}
                                             </p>
@@ -516,15 +562,32 @@ export default function EmployeeManagement() {
                                                 >
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
-                                                <button
-                                                    onClick={() =>
-                                                        setEmployeeToDelete(emp)
-                                                    }
-                                                    className="p-1 hover:text-rose-600 transition"
-                                                    title="Delete Employee"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+
+                                                {emp.Status === "Active" ? (
+                                                    <button
+                                                        onClick={() =>
+                                                            setEmployeeToDelete(
+                                                                emp,
+                                                            )
+                                                        }
+                                                        className="p-1 hover:text-rose-600 transition"
+                                                        title="Deactivate Employee"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() =>
+                                                            setEmployeeToRestore(
+                                                                emp,
+                                                            )
+                                                        }
+                                                        className="p-1 hover:text-emerald-600 transition"
+                                                        title="Restore Employee"
+                                                    >
+                                                        <RotateCcw className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -532,7 +595,7 @@ export default function EmployeeManagement() {
                             ) : (
                                 <tr>
                                     <td
-                                        colSpan="6"
+                                        colSpan="7"
                                         className="py-8 text-center text-slate-400 text-xs"
                                     >
                                         No personnel found matching the filter
@@ -597,12 +660,25 @@ export default function EmployeeManagement() {
             {/* DELETE CONFIRMATION */}
             {employeeToDelete && (
                 <DeleteConfirmationModal
-                    title="Delete Employee"
-                    message={`Are you sure you want to delete ${employeeToDelete.FullName}? This action cannot be undone.`}
+                    title="Deactivate Employee"
+                    message={`Are you sure you want to set ${employeeToDelete.FullName} to Inactive? You can reactivate them later from Academic Structure if needed.`}
+                    confirmLabel="Deactivate"
                     onConfirm={confirmDeleteEmployee}
                     onClose={() => setEmployeeToDelete(null)}
                 />
             )}
+
+            {/* RESTORE CONFIRMATION */}
+            {employeeToRestore && (
+                <RestoreConfirmationModal
+                    title="Restore Employee"
+                    message={`Set ${employeeToRestore.FullName} back to Active? They will appear in the active personnel list again.`}
+                    confirmLabel="Restore"
+                    onConfirm={confirmRestoreEmployee}
+                    onClose={() => setEmployeeToRestore(null)}
+                />
+            )}
+
             {/* PHOTO VIEWER */}
             {viewingPhotoEmployee && (
                 <div

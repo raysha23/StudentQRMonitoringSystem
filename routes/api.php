@@ -20,12 +20,18 @@ Route::apiResource('courses', CourseController::class);
 Route::apiResource('school-years', SchoolYearController::class);
 Route::apiResource('sections', SectionController::class);
 Route::apiResource('scanners', ScannerController::class);
+Route::get('students/counts', [StudentController::class, 'counts']);
+Route::patch('students/{student}/restore', [StudentController::class, 'restore']);
 Route::apiResource('students', StudentController::class);
 
 
 Route::apiResource('departments', DepartmentController::class);
 Route::apiResource('positions', PositionController::class);
 Route::apiResource('subjects', SubjectController::class);
+
+
+Route::get('employees/counts', [EmployeeController::class, 'counts']);
+Route::patch('employees/{employee}/restore', [EmployeeController::class, 'restore']);
 Route::apiResource('employees', EmployeeController::class);
 
 // Barcodes

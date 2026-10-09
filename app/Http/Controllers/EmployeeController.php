@@ -17,9 +17,37 @@ class EmployeeController extends Controller
         'position.department:DepartmentID,DepartmentName,DepartmentType',
     ];
 
-    public function index()
+    public function index(Request $request)
     {
-        return Employee::with(self::WITH)->orderBy('EmployeeID', 'desc')->get();
+        // Default to Active; ?status=Inactive or ?status=All overrides
+        $status = $request->query('status', 'Active');
+
+        $query = Employee::with(self::WITH)->orderBy('EmployeeID', 'desc');
+
+        if (in_array($status, ['Active', 'Inactive'], true)) {
+            $query->where('Status', $status);
+        }
+
+        return $query->get();
+    }
+
+    public function counts()
+    {
+        return response()->json([
+            'total'    => Employee::count(),
+            'active'   => Employee::where('Status', 'Active')->count(),
+            'inactive' => Employee::where('Status', 'Inactive')->count(),
+            'faculty'  => Employee::where('Status', 'Active')
+                ->whereHas('position.department', fn($q) => $q->where('DepartmentType', 'Teaching'))
+                ->count(),
+        ]);
+    }
+    
+    public function restore(Employee $employee)
+    {
+        $employee->update(['Status' => 'Active']);
+
+        return response()->json($employee->load(self::WITH));
     }
 
     public function store(Request $request)
@@ -90,23 +118,10 @@ class EmployeeController extends Controller
 
     public function destroy(Employee $employee)
     {
-        // Barcodes and logs reference this employee, so block the delete
-        if ($employee->barcodes()->exists() || $employee->logs()->exists()) {
-            return response()->json(
-                ['message' => 'This employee has barcodes or attendance logs. Set the status to Inactive instead.'],
-                409
-            );
-        }
+        $employee->update(['Status' => 'Inactive']);
 
-        if ($employee->ProfilePicture) {
-            Storage::disk('public')->delete($employee->ProfilePicture);
-        }
-
-        $employee->delete();
-
-        return response()->json(['message' => 'Employee deleted']);
+        return response()->json(['message' => 'Employee set to Inactive']);
     }
-
     private function generateEmployeeNumber(): string
     {
         // Based on the highest existing number, so deletes never cause a collision

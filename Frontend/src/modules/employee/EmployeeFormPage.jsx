@@ -386,27 +386,6 @@ export default function EmployeeFormPage({
                             )}
                         </div>
 
-                        {mode === "edit" && (
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                                    Status
-                                </label>
-                                <select
-                                    value={formData.Status}
-                                    onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            Status: e.target.value,
-                                        })
-                                    }
-                                    className={fieldCls}
-                                >
-                                    <option value="Active">Active</option>
-                                    <option value="Inactive">Inactive</option>
-                                </select>
-                            </div>
-                        )}
-
                         <div className="pt-3 flex items-center justify-end space-x-2 border-t border-slate-100">
                             <button
                                 type="button"

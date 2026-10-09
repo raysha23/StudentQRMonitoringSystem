@@ -16,6 +16,7 @@ import {
     sectionsApi,
     getErrorMessage,
 } from "../../api/academic-management-api";
+import DeleteConfirmationModal from "../../utils/general-modal/DeleteConfirmationModal";
 
 const TABS = ["Departments", "Programs", "Positions", "Courses", "Sections"];
 
@@ -305,7 +306,7 @@ function EntityManager({
     const debouncedSearch = useDebounce(search);
     const [statusFilter, setStatusFilter] = useState("");
     const [actionError, setActionError] = useState(null); // delete errors
-
+    const [itemToDelete, setItemToDelete] = useState(null);
     const [modal, setModal] = useState(null); // null | { mode: 'add' } | { mode: 'edit', item }
     const [form, setForm] = useState({});
     const [formError, setFormError] = useState(null);
@@ -400,16 +401,11 @@ function EntityManager({
         }
     };
 
-    const handleDelete = async (item) => {
-        if (!window.confirm(`Delete this ${singular.toLowerCase()}?`)) return;
-        try {
-            await api.remove(item[idKey]);
-            setActionError(null);
-            await reload();
-            onChanged?.();
-        } catch (err) {
-            setActionError(getErrorMessage(err, "Failed to delete."));
-        }
+    const confirmDelete = async () => {
+        await api.remove(itemToDelete[idKey]);
+        setItemToDelete(null);
+        await reload();
+        onChanged?.();
     };
 
     return (
@@ -511,7 +507,7 @@ function EntityManager({
                                             </button>
                                             <button
                                                 onClick={() =>
-                                                    handleDelete(item)
+                                                    setItemToDelete(item)
                                                 }
                                                 className="p-1 hover:text-rose-600 transition"
                                                 title={`Delete ${singular}`}
@@ -556,6 +552,14 @@ function EntityManager({
                     onClose={closeModal}
                 />
             )}
+            {itemToDelete && (
+                <DeleteConfirmationModal
+                    title={`Delete ${singular}`}
+                    message={`Are you sure you want to delete this ${singular.toLowerCase()}? This action cannot be undone.`}
+                    onConfirm={confirmDelete}
+                    onClose={() => setItemToDelete(null)}
+                />
+            )}
         </div>
     );
 }
@@ -578,6 +582,7 @@ export default function AcademicStructure() {
 
     const queryClient = useQueryClient();
     const [actionError, setActionError] = useState(null);
+    const [programToDelete, setProgramToDelete] = useState(null);
 
     const { data: programs = [] } = useQuery({
         queryKey: programsApi.key,
@@ -740,15 +745,10 @@ export default function AcademicStructure() {
         }
     };
 
-    const handleDeleteProgram = async (program) => {
-        if (!window.confirm(`Delete program ${program.CourseCode}?`)) return;
-        try {
-            await programsApi.remove(program.CourseID);
-            setActionError(null);
-            await refreshPrograms();
-        } catch (err) {
-            setActionError(getErrorMessage(err, "Failed to delete program."));
-        }
+    const confirmDeleteProgram = async () => {
+        await programsApi.remove(programToDelete.CourseID);
+        setProgramToDelete(null);
+        await refreshPrograms();
     };
 
     return (
@@ -959,7 +959,7 @@ export default function AcademicStructure() {
                                                     </button>
                                                     <button
                                                         onClick={() =>
-                                                            handleDeleteProgram(
+                                                            setProgramToDelete(
                                                                 program,
                                                             )
                                                         }
@@ -1192,6 +1192,15 @@ export default function AcademicStructure() {
                     error={formError}
                     onSubmit={handleProgramSubmit}
                     onClose={() => setModal(null)}
+                />
+            )}
+
+            {programToDelete && (
+                <DeleteConfirmationModal
+                    title="Delete Program"
+                    message={`Are you sure you want to delete program ${programToDelete.CourseCode}? This action cannot be undone.`}
+                    onConfirm={confirmDeleteProgram}
+                    onClose={() => setProgramToDelete(null)}
                 />
             )}
         </div>

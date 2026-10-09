@@ -1,7 +1,14 @@
 // File Path: Frontend\src\api\employee-api.js
 import api from "./client";
 
-export const getEmployees = async () => (await api.get("/employees")).data;
+export const getEmployees = async (status = "Active") =>
+    (await api.get("/employees", { params: { status } })).data;
+
+export const getEmployeeCounts = async () =>
+    (await api.get("/employees/counts")).data;
+
+export const restoreEmployee = async (id) =>
+    (await api.patch(`/employees/${id}/restore`)).data;
 
 // Both calls take FormData because of the profile picture upload
 export const createEmployee = async (formData) =>
