@@ -191,19 +191,6 @@ export default function EmployeeFormPage({
                                 {serverError}
                             </div>
                         )}
-
-                        {positions.length === 0 && (
-                            <div className="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-lg px-3 py-2.5">
-                                No positions exist yet. Add some in Academic
-                                Structure → Positions first.
-                            </div>
-                        )}
-                        {departments.length === 0 && (
-                            <div className="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-lg px-3 py-2.5">
-                                No departments exist yet. Add some in Academic
-                                Structure → Departments first.
-                            </div>
-                        )}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">
